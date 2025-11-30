@@ -52,12 +52,19 @@ def get_config(config_file: str) -> edict:
     try:
         sys.path.insert(0, parent_dir)
         config_base = importlib.import_module("configs.base")
-        cfg = config_base.config.copy()
+        # copy()는 일반 dict를 반환하므로 edict()로 감싸야 함
+        cfg = edict(config_base.config.copy())
 
         # Specific config 로드
         config_specific = importlib.import_module(f"configs.{temp_module_name}")
         job_cfg = config_specific.config
-        cfg.update(job_cfg)
+        # job_cfg가 EasyDict이면 dict로 변환 후 update
+        if isinstance(job_cfg, edict):
+            cfg.update(dict(job_cfg))
+        else:
+            cfg.update(job_cfg)
+        # update 후에도 EasyDict 유지
+        cfg = edict(cfg)
     finally:
         sys.path = sys_path_backup
 
