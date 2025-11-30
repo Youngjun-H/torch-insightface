@@ -12,15 +12,7 @@ import torch.nn.functional as F
 from sklearn.metrics import accuracy_score
 from torch.utils.data import DataLoader
 
-try:
-    from ..data.lfw_dataset import LFWPairsDataset
-except ImportError:
-    # 상대 import 실패 시 절대 import 시도
-    import os
-    import sys
-
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from data.lfw_dataset import LFWPairsDataset
+from arcface_lightning_v2.data.lfw_dataset import LFWPairsDataset
 
 
 class LFWVerificationCallback(L.Callback):

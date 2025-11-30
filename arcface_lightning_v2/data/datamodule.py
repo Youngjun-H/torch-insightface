@@ -5,8 +5,9 @@ import random
 import lightning as L
 import numpy as np
 import torch
-from dataset import get_dataset
 from torch.utils.data import DataLoader
+
+from .dataset import get_dataset
 
 
 def _worker_init_fn(worker_id, num_workers, rank, seed):
