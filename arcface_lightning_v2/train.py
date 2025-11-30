@@ -8,6 +8,8 @@ import sys
 from datetime import datetime
 
 import lightning as L
+import torch
+import wandb
 from lightning.pytorch.loggers import WandbLogger
 
 from arcface_lightning_v2.data.datamodule import ArcFaceDataModule
@@ -108,26 +110,12 @@ def main():
     # Loggers
     loggers = []
 
-    # WandB Logger (optional)
-    if cfg.using_wandb:
-        try:
-            import wandb
-
-            run_name = datetime.now().strftime("%y%m%d_%H%M")
-            if cfg.suffix_run_name:
-                run_name = f"{run_name}_{cfg.suffix_run_name}"
-
-            wandb_logger = WandbLogger(
-                entity=cfg.wandb_entity,
-                project=cfg.wandb_project,
-                name=run_name,
-                save_dir=cfg.output,
-                resume=cfg.wandb_resume,
-            )
-            loggers.append(wandb_logger)
-            print(f"[Info] WandB Logger enabled: {cfg.wandb_project}/{run_name}")
-        except Exception as e:
-            print(f"[Warning] WandB initialization failed: {e}")
+    # wandb 설정
+    wandb_logger = WandbLogger(
+        project="ArcFace-Lightning",
+        name=f"{datetime.now().strftime("%y%m%d_%H%M")}",
+    )
+    loggers.append(wandb_logger)
 
     # Trainer 설정
     trainer = L.Trainer(
@@ -163,4 +151,6 @@ def main():
 
 
 if __name__ == "__main__":
+    torch.set_float32_matmul_precision("medium")
+    wandb.login(key="53f960c86b81377b89feb5d30c90ddc6c3810d3a")
     main()
