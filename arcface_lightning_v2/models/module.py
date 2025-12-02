@@ -195,3 +195,8 @@ class ArcFaceModule(L.LightningModule):
         """Optimizer step 전에 gradient clipping"""
         # Gradient clipping
         torch.nn.utils.clip_grad_norm_(self.backbone.parameters(), 5.0)
+
+    @property
+    def _ddp_params_and_buffers_to_ignore(self):
+        """DDP에서 PartialFC 파라미터 제외 (각 GPU마다 다른 weight shape)"""
+        return ["partial_fc.weight"]
