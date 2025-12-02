@@ -142,9 +142,10 @@ def main():
         dirpath=checkpoint_dir,
         filename="arcface-{epoch:02d}-{train_loss:.2f}",
         save_top_k=3,
-        monitor="train_loss",
+        monitor="train_loss",  # module.py에서 로깅하는 키와 일치
         mode="min",
         every_n_epochs=args.saveckp_freq,
+        save_on_train_epoch_end=True,  # Epoch 끝에서 저장
     )
     callbacks.append(checkpoint_callback)
 
