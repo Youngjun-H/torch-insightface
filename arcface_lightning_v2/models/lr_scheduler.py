@@ -21,9 +21,8 @@ class PolynomialLRWarmup(_LRScheduler):
         total_iters=5,
         power=1.0,
         last_epoch=-1,
-        verbose=False,
     ):
-        super().__init__(optimizer, last_epoch=last_epoch, verbose=verbose)
+        super().__init__(optimizer, last_epoch=last_epoch)
         self.total_iters = total_iters
         self.power = power
         self.warmup_iters = warmup_iters

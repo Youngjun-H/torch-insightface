@@ -146,18 +146,20 @@ class IResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        with torch.cuda.amp.autocast(self.fp16):
-            x = self.conv1(x)
-            x = self.bn1(x)
-            x = self.prelu(x)
-            x = self.layer1(x)
-            x = self.layer2(x)
-            x = self.layer3(x)
-            x = self.layer4(x)
-            x = self.bn2(x)
-            x = torch.flatten(x, 1)
-            x = self.dropout(x)
-        x = self.fc(x.float() if self.fp16 else x)
+        # Lightning이 AMP를 처리하므로, 여기서는 명시적으로 처리하지 않음
+        # A100/H100은 bfloat16과 float16을 모두 지원하므로, Lightning의 AMP가 자동으로 처리
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.prelu(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.bn2(x)
+        x = torch.flatten(x, 1)
+        x = self.dropout(x)
+        # Lightning의 AMP가 자동으로 처리하므로, 명시적인 dtype 변환 불필요
+        x = self.fc(x)
         x = self.features(x)
         return x
 

@@ -2,7 +2,6 @@
 Lightning Callbacks for ArcFace Training
 """
 
-import os
 from typing import Optional
 
 import lightning as L
@@ -94,13 +93,18 @@ class LFWVerificationCallback(L.Callback):
         self, trainer: L.Trainer, pl_module: L.LightningModule
     ) -> None:
         """Epoch 끝날 때 verification 수행"""
-        self._run_verification(trainer, pl_module, trainer.global_step)
+        # on_train_epoch_end에서는 on_step=False, on_epoch=True만 허용됨
+        self._run_verification(
+            trainer, pl_module, trainer.global_step, on_step=False, on_epoch=True
+        )
 
     def _run_verification(
         self,
         trainer: L.Trainer,
         pl_module: L.LightningModule,
         global_step: int,
+        on_step: bool = True,
+        on_epoch: bool = False,
     ) -> None:
         """Verification 수행"""
         if self.dataset is None:
@@ -150,12 +154,24 @@ class LFWVerificationCallback(L.Callback):
             self.highest_acc = accuracy
 
         # Lightning logger에 기록
+        # on_step과 on_epoch 파라미터는 호출 컨텍스트에 따라 다르게 설정됨
+        # on_train_epoch_end에서는 on_step=False, on_epoch=True만 허용됨
+        # on_train_batch_end에서는 on_step=True, on_epoch=False 사용 가능
         pl_module.log(
-            "val/lfw_accuracy", accuracy, on_step=True, on_epoch=True, prog_bar=True
+            "val/lfw_accuracy",
+            accuracy,
+            on_step=on_step,
+            on_epoch=on_epoch,
+            prog_bar=True,
         )
-        pl_module.log("val/lfw_threshold", threshold, on_step=True, on_epoch=False)
         pl_module.log(
-            "val/lfw_highest_accuracy", self.highest_acc, on_step=True, on_epoch=True
+            "val/lfw_threshold", threshold, on_step=on_step, on_epoch=on_epoch
+        )
+        pl_module.log(
+            "val/lfw_highest_accuracy",
+            self.highest_acc,
+            on_step=on_step,
+            on_epoch=on_epoch,
         )
 
         # 콘솔 출력

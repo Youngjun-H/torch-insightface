@@ -2,6 +2,10 @@ __pycache__/
 
 .venv/
 .vscode/
+wandb/
 .DS_Store
 
 *.jpg
+*.csv
+*.zip
+*.log

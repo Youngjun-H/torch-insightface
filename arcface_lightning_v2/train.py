@@ -4,14 +4,14 @@ ArcFace Training Script with PyTorch Lightning
 
 import argparse
 import os
-import sys
 from datetime import datetime
 
 import lightning as L
 import torch
-import wandb
+from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 
+import wandb
 from arcface_lightning_v2.data.datamodule import ArcFaceDataModule
 from arcface_lightning_v2.lightning_utils.callbacks import LFWVerificationCallback
 from arcface_lightning_v2.lightning_utils.config import get_config
@@ -32,6 +32,30 @@ def main():
         type=str,
         default="datasets/pairs.txt",
         help="LFW pairs.txt file path for verification",
+    )
+    parser.add_argument(
+        "--num_nodes",
+        type=int,
+        default=None,
+        help="Number of nodes for distributed training (auto-detected from SLURM if not specified)",
+    )
+    parser.add_argument(
+        "--devices",
+        type=int,
+        default=None,
+        help="Number of GPUs per node (auto-detected from SLURM if not specified). Use 'auto' for automatic detection.",
+    )
+    parser.add_argument(
+        "--saveckp_freq",
+        type=int,
+        default=1,
+        help="Save checkpoint every N epochs (default: 1)",
+    )
+    parser.add_argument(
+        "--epoch",
+        type=int,
+        default=None,
+        help="Number of training epochs (overrides config file if specified)",
     )
     args = parser.parse_args()
 
@@ -81,7 +105,7 @@ def main():
         momentum=cfg.momentum,
         weight_decay=cfg.weight_decay,
         num_image=cfg.num_image,
-        num_epoch=cfg.num_epoch,
+        num_epoch=args.epoch,  # train.sh에서 전달된 값 또는 config 파일 값
         warmup_epoch=cfg.warmup_epoch,
         batch_size=cfg.batch_size,
         gradient_acc=cfg.gradient_acc,
@@ -107,6 +131,23 @@ def main():
     else:
         print(f"[Warning] LFW pairs file not found: {args.pairs_file}")
 
+    lr_monitor = LearningRateMonitor(logging_interval="epoch")
+    callbacks.append(lr_monitor)
+
+    # 체크포인트 저장 디렉토리 설정
+    checkpoint_dir = os.path.join(cfg.output, "checkpoints")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=checkpoint_dir,
+        filename="arcface-{epoch:02d}-{train_loss:.2f}",
+        save_top_k=3,
+        monitor="train_loss",
+        mode="min",
+        every_n_epochs=args.saveckp_freq,
+    )
+    callbacks.append(checkpoint_callback)
+
     # Loggers
     loggers = []
 
@@ -118,11 +159,16 @@ def main():
     loggers.append(wandb_logger)
 
     # Trainer 설정
+    # 주의: PartialFC는 DDP에 포함되지 않음 (각 GPU마다 다른 weight shape)
+    # ArcFaceModule의 parameters() 메서드가 PartialFC를 제외하므로
+    # DDP는 Backbone 파라미터만 동기화하고, PartialFC는 별도로 관리됨
     trainer = L.Trainer(
-        max_epochs=cfg.num_epoch,
-        accelerator="gpu" if cfg.fp16 else "auto",
-        devices="auto",
-        precision="16-mixed" if cfg.fp16 else "32",
+        max_epochs=args.epoch,  # train.sh에서 전달된 값 또는 config 파일 값
+        accelerator="gpu",
+        devices=args.devices,
+        num_nodes=args.num_nodes,
+        strategy="ddp",  # DDP 사용 (PartialFC는 자동으로 제외됨)
+        precision="bf16-mixed",  # A100/H100 최적화: bfloat16 사용
         accumulate_grad_batches=cfg.gradient_acc,
         callbacks=callbacks,
         logger=loggers if loggers else True,  # 기본 logger 사용
@@ -145,7 +191,13 @@ def main():
     print(f"[Info] Network: {cfg.network}")
     print(f"[Info] Batch size: {cfg.batch_size}")
     print(f"[Info] Learning rate: {cfg.lr}")
-    print(f"[Info] Epochs: {cfg.num_epoch}")
+    print(f"[Info] Epochs: {args.epoch}")
+    print(f"[Info] Number of nodes: {args.num_nodes}")
+    print(f"[Info] Devices per node: {args.devices}")
+    total_gpus = (
+        args.num_nodes * args.devices if isinstance(args.devices, int) else "auto"
+    )
+    print(f"[Info] Total GPUs: {total_gpus}")
 
     trainer.fit(model, datamodule=datamodule, ckpt_path=ckpt_path)
 

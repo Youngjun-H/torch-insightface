@@ -3,7 +3,7 @@ import os
 import pandas as pd
 
 # Kaggle LFW root
-IMG_ROOT = "datasets/lfw-deepfunneled/lfw-deepfunneled"
+IMG_ROOT = "/purestorage/AILAB/AI_2/yjhwang/work/face/torch-insightface/datasets/LFW/lfw-deepfunneled/lfw-deepfunneled"
 # 예: lfw-deepfunneled/George_W_Bush/George_W_Bush_0001.jpg
 
 df = pd.read_csv("pairs.csv")

@@ -3,7 +3,6 @@ Partial FC V2 for distributed training
 Lightning 환경에 맞게 수정
 """
 
-import math
 from typing import Callable
 
 import torch
@@ -108,7 +107,10 @@ class PartialFC_V2(torch.nn.Module):
 
             labels[index_positive] = torch.searchsorted(index, labels[index_positive])
 
-        return self.weight[self.weight_index]
+        weight = self.weight
+        if weight.device != device:
+            weight = weight.to(device=device)
+        return weight[self.weight_index]
 
     def forward(
         self,
@@ -143,11 +145,15 @@ class PartialFC_V2(torch.nn.Module):
         )
 
         device = local_embeddings.device
+        dtype = local_embeddings.dtype  # AMP 사용 시 dtype 일치를 위해 필요
 
         if self.world_size > 1 and distributed.is_initialized():
             # Distributed training
+            # local_embeddings의 dtype을 사용하여 gather_list 생성 (AMP 호환성)
             _gather_embeddings = [
-                torch.zeros((batch_size, self.embedding_size), device=device)
+                torch.zeros(
+                    (batch_size, self.embedding_size), dtype=dtype, device=device
+                )
                 for _ in range(self.world_size)
             ]
             _gather_labels = [
@@ -176,12 +182,16 @@ class PartialFC_V2(torch.nn.Module):
         else:
             weight = self.weight
 
-        with torch.cuda.amp.autocast(self.fp16):
-            norm_embeddings = normalize(embeddings)
-            norm_weight_activated = normalize(weight)
-            logits = linear(norm_embeddings, norm_weight_activated)
-        if self.fp16:
-            logits = logits.float()
+        # ⚠️ 중요: PartialFC weight는 _modules에 등록되지 않아 Lightning이 자동으로 GPU로 이동시키지 않음
+        # 따라서 명시적으로 device와 dtype을 맞춰야 함
+        if weight.device != device:
+            weight = weight.to(device=device)
+        if weight.dtype != embeddings.dtype:
+            weight = weight.to(dtype=embeddings.dtype)
+
+        norm_embeddings = normalize(embeddings)
+        norm_weight_activated = normalize(weight)
+        logits = linear(norm_embeddings, norm_weight_activated)
         logits = logits.clamp(-1, 1)
 
         logits = self.margin_softmax(logits, labels)
@@ -212,8 +222,8 @@ class DistCrossEntropyFunc(torch.autograd.Function):
         logits.div_(sum_logits_exp)
 
         index = torch.where(label != -1)[0]
-        # loss
-        loss = torch.zeros(batch_size, 1, device=logits.device)
+        # loss - logits와 같은 dtype 사용 (AMP 호환성)
+        loss = torch.zeros(batch_size, 1, dtype=logits.dtype, device=logits.device)
         loss[index] = logits[index].gather(1, label[index])
         if distributed.is_initialized():
             distributed.all_reduce(loss, distributed.ReduceOp.SUM)
@@ -228,8 +238,11 @@ class DistCrossEntropyFunc(torch.autograd.Function):
             label,
         ) = ctx.saved_tensors
         batch_size = logits.size(0)
+        # one_hot도 logits와 같은 dtype 사용 (AMP 호환성)
         one_hot = torch.zeros(
-            size=[index.size(0), logits.size(1)], device=logits.device
+            size=[index.size(0), logits.size(1)],
+            dtype=logits.dtype,
+            device=logits.device,
         )
         one_hot.scatter_(1, label[index], 1)
         logits[index] -= one_hot
@@ -252,6 +265,23 @@ class AllGatherFunc(torch.autograd.Function):
     def forward(ctx, tensor, *gather_list):
         gather_list = list(gather_list)
         if distributed.is_initialized():
+            # dtype 일치 보장 (AMP 사용 시 중요)
+            # tensor의 dtype과 device를 기준으로 모든 gather 텐서를 변환
+            tensor_dtype = tensor.dtype
+            tensor_device = tensor.device
+
+            # 모든 gather 텐서가 tensor와 같은 dtype과 device를 가지도록 보장
+            # to() 메서드는 새로운 텐서를 반환하므로 리스트에 다시 할당해야 함
+            for i in range(len(gather_list)):
+                if (
+                    gather_list[i].dtype != tensor_dtype
+                    or gather_list[i].device != tensor_device
+                ):
+                    gather_list[i] = gather_list[i].to(
+                        dtype=tensor_dtype, device=tensor_device
+                    )
+
+            # distributed.all_gather 호출
             distributed.all_gather(gather_list, tensor)
         else:
             # Single GPU: just copy

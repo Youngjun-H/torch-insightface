@@ -19,9 +19,11 @@ config.lr = 0.1
 config.verbose = 2000
 config.dali = False
 
-config.rec = "/train_tmp/ms1m-retinaface-t1"
-config.num_classes = 93431
-config.num_image = 5179510
+config.rec = (
+    "/purestorage/AILAB/AI_2/yjhwang/work/face/torch-insightface/datasets/ms1m-arcface"
+)
+config.num_classes = 840
+config.num_image = 56560
 config.num_epoch = 20
 config.warmup_epoch = 0
-config.val_targets = ["lfw", "cfp_fp", "agedb_30"]
+config.val_targets = ["lfw"]
