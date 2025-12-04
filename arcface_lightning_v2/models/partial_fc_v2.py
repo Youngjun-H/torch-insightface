@@ -194,8 +194,56 @@ class PartialFC_V2(torch.nn.Module):
         logits = linear(norm_embeddings, norm_weight_activated)
         logits = logits.clamp(-1, 1)
 
+        # 디버깅: 첫 번째 배치에서 logits 통계 확인
+        if hasattr(self, "_debug_step_count"):
+            self._debug_step_count += 1
+        else:
+            self._debug_step_count = 0
+
+        # labels가 [N, 1] shape일 수 있으므로 squeeze 처리 (디버깅용)
+        labels_flat = labels.squeeze(1) if labels.dim() > 1 else labels
+        num_positive = (labels_flat != -1).sum().item() if self._debug_step_count < 3 else 0
+
+        if self._debug_step_count < 3:  # 처음 3번만 출력
+            print(f"\n[DEBUG] PartialFC Forward (step {self._debug_step_count})")
+            print(f"[DEBUG]   Batch size: {batch_size}, World size: {self.world_size}")
+            print(f"[DEBUG]   Total embeddings: {embeddings.shape[0]}")
+            print(f"[DEBUG]   Positive samples: {num_positive} / {labels_flat.shape[0]}")
+            print(f"[DEBUG]   Logits shape: {logits.shape}")
+            print(f"[DEBUG]   Logits range: [{logits.min().item():.4f}, {logits.max().item():.4f}]")
+            print(f"[DEBUG]   Logits mean: {logits.mean().item():.4f}, std: {logits.std().item():.4f}")
+            if num_positive > 0:
+                positive_mask = labels_flat != -1
+                positive_logits = logits[positive_mask]
+                positive_labels = labels_flat[positive_mask]
+                target_logits = positive_logits.gather(
+                    1, positive_labels.unsqueeze(1)
+                ).squeeze()
+                print(f"[DEBUG]   Target logits range: [{target_logits.min().item():.4f}, {target_logits.max().item():.4f}]")
+                print(f"[DEBUG]   Target logits mean: {target_logits.mean().item():.4f}")
+
         logits = self.margin_softmax(logits, labels)
+
+        if self._debug_step_count < 3:
+            print(f"[DEBUG]   After margin_softmax:")
+            print(f"[DEBUG]     Logits range: [{logits.min().item():.4f}, {logits.max().item():.4f}]")
+            print(f"[DEBUG]     Logits mean: {logits.mean().item():.4f}, std: {logits.std().item():.4f}")
+            if num_positive > 0:
+                positive_mask = labels_flat != -1
+                positive_logits_after = logits[positive_mask]
+                positive_labels = labels_flat[positive_mask]
+                target_logits_after = positive_logits_after.gather(
+                    1, positive_labels.unsqueeze(1)
+                ).squeeze()
+                print(f"[DEBUG]     Target logits after margin: range [{target_logits_after.min().item():.4f}, {target_logits_after.max().item():.4f}]")
+                print(f"[DEBUG]     Target logits after margin: mean {target_logits_after.mean().item():.4f}")
+
         loss = self.dist_cross_entropy(logits, labels)
+
+        if self._debug_step_count < 3:
+            print(f"[DEBUG]   Loss: {loss.item():.6f}")
+            print(f"[DEBUG] ====================================\n")
+
         return loss
 
 

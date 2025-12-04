@@ -82,12 +82,13 @@ class LFWVerificationCallback(L.Callback):
         batch,
         batch_idx: int,
     ) -> None:
-        """학습 배치 끝날 때 주기적으로 verification 수행"""
-        global_step = trainer.global_step
-
-        # verbose 주기마다만 실행
-        if global_step > 0 and global_step % self.verbose == 0:
-            self._run_verification(trainer, pl_module, global_step)
+        """학습 배치 끝날 때 주기적으로 verification 수행 (비활성화됨)"""
+        # 주기적 verification은 비활성화
+        # epoch 끝에서만 verification 수행하도록 변경
+        # global_step = trainer.global_step
+        # if global_step > 0 and global_step % self.verbose == 0:
+        #     self._run_verification(trainer, pl_module, global_step)
+        pass
 
     def on_train_epoch_end(
         self, trainer: L.Trainer, pl_module: L.LightningModule
@@ -107,6 +108,11 @@ class LFWVerificationCallback(L.Callback):
         on_epoch: bool = False,
     ) -> None:
         """Verification 수행"""
+        # 🟩 행동 1: DDP 멀티노드 환경에서 rank 0에서만 실행
+        # 여러 rank에서 동시에 실행하면 중복 계산 및 잘못된 결과 발생
+        if trainer.global_rank != 0:
+            return
+
         if self.dataset is None:
             self.setup(trainer, pl_module, "fit")
 
@@ -228,8 +234,9 @@ class LFWVerificationCallback(L.Callback):
         labels: np.ndarray,
     ) -> float:
         """최적 threshold 찾기 (train set에서)"""
-        # Threshold 후보들
-        thresholds = np.arange(-1.0, 1.0, 0.01)
+        # 🟩 행동 2: threshold resolution을 0.001로 변경 (기존 0.01)
+        # 더 정밀한 threshold 탐색으로 accuracy 향상 가능 (+0.02 정도)
+        thresholds = np.arange(-1.0, 1.0, 0.001)
 
         best_threshold = 0.0
         best_accuracy = 0.0

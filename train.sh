@@ -11,14 +11,14 @@
 # SLURM Directives
 # 주의: 아래 값들을 실제 사용할 노드 수와 GPU 수에 맞게 수정하세요!
 # =============================================================================
-#SBATCH --job-name=CCTV-Training
+#SBATCH --job-name=CCTV
 #SBATCH --partition=hopper
-#SBATCH --nodes=1                    # 노드 수 (필요시 수정)
+#SBATCH --nodes=4                    # 노드 수 (필요시 수정)
 #SBATCH --gres=gpu:8                 # 노드당 GPU 수 (필요시 수정)
 #SBATCH --ntasks-per-node=8          # 노드당 태스크 수 (보통 GPU 수와 동일)
 #SBATCH --cpus-per-task=14
 #SBATCH --mem=2000G
-#SBATCH --comment="arcface_training"
+#SBATCH --comment="person_reid_training"
 #SBATCH --output=model_%A.log
 
 # =============================================================================

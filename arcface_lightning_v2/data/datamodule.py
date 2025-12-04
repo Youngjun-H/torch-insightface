@@ -1,11 +1,12 @@
 # worker_init_fn은 utils가 없을 수 있으므로 직접 구현
 import functools
 import random
+from typing import List, Union
 
 import lightning as L
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import ConcatDataset, DataLoader
 
 from .dataset import get_dataset
 
@@ -23,15 +24,27 @@ class ArcFaceDataModule(L.LightningDataModule):
 
     def __init__(
         self,
-        root_dir: str,
+        root_dir: Union[str, List[str]],
         batch_size: int = 128,
         num_workers: int = 4,
         seed: int = 2048,
     ):
+        """
+        Args:
+            root_dir: 단일 데이터셋 경로 (str) 또는 여러 데이터셋 경로 리스트 (List[str])
+            batch_size: 배치 크기
+            num_workers: DataLoader worker 수
+            seed: 랜덤 시드
+        """
         super().__init__()
         self.save_hyperparameters()
 
-        self.root_dir = root_dir
+        # root_dir을 리스트로 정규화
+        if isinstance(root_dir, str):
+            self.root_dirs = [root_dir]
+        else:
+            self.root_dirs = root_dir
+
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.seed = seed
@@ -47,12 +60,38 @@ class ArcFaceDataModule(L.LightningDataModule):
         DDP 환경에서도 모든 프로세스에서 호출됨
         """
         if stage == "fit" or stage is None:
-            self.train_dataset = get_dataset(self.root_dir)
+            # 여러 데이터셋을 합치기
+            datasets = []
+            for root_dir in self.root_dirs:
+                dataset = get_dataset(root_dir)
+                datasets.append(dataset)
+                print(
+                    f"[Info] Loaded dataset from: {root_dir} (samples: {len(dataset)})"
+                )
+
+            if len(datasets) > 1:
+                self.train_dataset = ConcatDataset(datasets)
+                total_samples = sum(len(d) for d in datasets)
+                print(
+                    f"[Info] Concatenated {len(datasets)} datasets, total samples: {total_samples}"
+                )
+            else:
+                self.train_dataset = datasets[0]
+
             # ArcFace는 보통 validation 데이터셋이 없지만, 필요시 추가 가능
             # self.val_dataset = get_dataset(self.root_dir, split="val")
 
         if stage == "test" or stage is None:
-            self.test_dataset = get_dataset(self.root_dir)
+            # Test도 여러 데이터셋 지원
+            datasets = []
+            for root_dir in self.root_dirs:
+                dataset = get_dataset(root_dir)
+                datasets.append(dataset)
+
+            if len(datasets) > 1:
+                self.test_dataset = ConcatDataset(datasets)
+            else:
+                self.test_dataset = datasets[0]
 
     def train_dataloader(self) -> DataLoader:
         """학습용 DataLoader 반환"""

@@ -20,7 +20,7 @@ arcface_lightning_v2/
 │   ├── lr_scheduler.py     # PolynomialLRWarmup
 │   ├── module.py           # ArcFaceModule (LightningModule)
 │   └── partial_fc_v2.py    # Partial FC V2
-├── lightning/
+├── lightning_utils/
 │   ├── callbacks.py        # LFW Verification Callback
 │   └── config.py           # Config 로드 유틸리티
 └── train.py                # 학습 스크립트

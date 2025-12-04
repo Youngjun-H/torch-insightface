@@ -1,8 +1,10 @@
 import numbers
 import os
+import warnings
 
 import numpy as np
 import torch
+from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
@@ -88,8 +90,10 @@ def get_dataset(root_dir: str) -> Dataset:
         return SyntheticDataset()
 
     # ImageFolder 형식
+    # ArcFace 표준: 112x112 이미지 크기
     transform = transforms.Compose(
         [
+            transforms.Resize((112, 112)),  # 모든 이미지를 112x112로 리사이즈
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),

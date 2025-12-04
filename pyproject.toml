@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "easydict>=1.13",
+    "insightface>=0.7.3",
     "lightning>=2.6.0",
+    "onnxruntime>=1.23.2",
     "pandas>=2.3.3",
     "scikit-learn>=1.7.2",
     "torchvision>=0.24.1",

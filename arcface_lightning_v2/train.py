@@ -66,8 +66,17 @@ def main():
     os.makedirs(cfg.output, exist_ok=True)
 
     # DataModule 생성
+    # cfg.rec가 리스트인지 문자열인지 확인
+    root_dirs = cfg.rec if isinstance(cfg.rec, list) else [cfg.rec]
+    if len(root_dirs) > 1:
+        print(f"[Info] Using {len(root_dirs)} datasets:")
+        for i, root_dir in enumerate(root_dirs, 1):
+            print(f"[Info]   {i}. {root_dir}")
+    else:
+        print(f"[Info] Using dataset: {root_dirs[0]}")
+    
     datamodule = ArcFaceDataModule(
-        root_dir=cfg.rec,
+        root_dir=cfg.rec,  # 문자열 또는 리스트 모두 지원
         batch_size=cfg.batch_size,
         num_workers=cfg.num_workers,
         seed=cfg.seed,
