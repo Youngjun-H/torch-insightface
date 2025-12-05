@@ -18,6 +18,10 @@ class LFWVerificationCallback(L.Callback):
     """
     LFW 데이터셋을 사용한 Face Verification Callback
     주기적으로 모델의 verification accuracy를 계산하고 로깅
+
+    지원하는 annotation 파일 형식:
+    1. <path1> <path2> <label> (기존 형식)
+    2. <label> <path1> <path2> (lfw_ann.txt 형식)
     """
 
     def __init__(
@@ -32,12 +36,13 @@ class LFWVerificationCallback(L.Callback):
     ):
         """
         Args:
-            pairs_file: pairs.txt 파일 경로
-            root_dir: 이미지 루트 디렉토리
+            pairs_file: pairs.txt 또는 lfw_ann.txt 파일 경로
+                       형식: <path1> <path2> <label> 또는 <label> <path1> <path2>
+            root_dir: 이미지 루트 디렉토리 (annotation 파일의 경로가 상대 경로인 경우)
             image_size: 이미지 크기
             batch_size: 배치 크기
             num_workers: DataLoader worker 수
-            verbose: 몇 step마다 verification 수행할지
+            verbose: 몇 step마다 verification 수행할지 (현재 비활성화됨)
             n_folds: K-fold cross validation fold 수
         """
         super().__init__()
@@ -69,9 +74,6 @@ class LFWVerificationCallback(L.Callback):
                 shuffle=False,
                 num_workers=self.num_workers,
                 pin_memory=torch.cuda.is_available(),
-            )
-            print(
-                f"[LFW Verification] Loaded {len(self.dataset)} pairs from {self.pairs_file}"
             )
 
     def on_train_batch_end(
@@ -178,12 +180,6 @@ class LFWVerificationCallback(L.Callback):
             self.highest_acc,
             on_step=on_step,
             on_epoch=on_epoch,
-        )
-
-        # 콘솔 출력
-        print(
-            f"[LFW Verification] Step {global_step}: Accuracy={accuracy:.4f}, "
-            f"Threshold={threshold:.4f}, Highest={self.highest_acc:.4f}"
         )
 
     def _k_fold_accuracy(

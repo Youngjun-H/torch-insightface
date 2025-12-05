@@ -101,7 +101,7 @@ echo ""
 
 srun python -m arcface_lightning_v2.train \
     configs/ms1mv3_r50.py \
-    --pairs_file datasets/pairs.txt \
+    --pairs_file /purestorage/AILAB/AI_2/yjhwang/work/face/datasets/FACE_VAL/val/lfw_ann.txt \
     --num_nodes ${ACTUAL_NODES} \
     --devices ${ACTUAL_GPUS_PER_NODE} \
     --epoch 20

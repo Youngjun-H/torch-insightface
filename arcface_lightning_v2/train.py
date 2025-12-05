@@ -66,15 +66,6 @@ def main():
     os.makedirs(cfg.output, exist_ok=True)
 
     # DataModule 생성
-    # cfg.rec가 리스트인지 문자열인지 확인
-    root_dirs = cfg.rec if isinstance(cfg.rec, list) else [cfg.rec]
-    if len(root_dirs) > 1:
-        print(f"[Info] Using {len(root_dirs)} datasets:")
-        for i, root_dir in enumerate(root_dirs, 1):
-            print(f"[Info]   {i}. {root_dir}")
-    else:
-        print(f"[Info] Using dataset: {root_dirs[0]}")
-    
     datamodule = ArcFaceDataModule(
         root_dir=cfg.rec,  # 문자열 또는 리스트 모두 지원
         batch_size=cfg.batch_size,
@@ -126,9 +117,12 @@ def main():
 
     # LFW Verification Callback
     if os.path.exists(args.pairs_file):
+        # annotation 파일의 디렉토리를 root_dir로 설정
+        # 예: /path/to/lfw_ann.txt -> /path/to (이미지 루트 디렉토리)
+        pairs_dir = os.path.dirname(os.path.abspath(args.pairs_file))
         lfw_callback = LFWVerificationCallback(
             pairs_file=args.pairs_file,
-            root_dir=None,  # pairs.txt의 경로가 절대 경로
+            root_dir=pairs_dir,  # annotation 파일과 같은 디렉토리를 이미지 루트로 사용
             image_size=(112, 112),
             batch_size=32,
             num_workers=4,
@@ -136,9 +130,6 @@ def main():
             n_folds=10,
         )
         callbacks.append(lfw_callback)
-        print(f"[Info] LFW Verification Callback enabled: {args.pairs_file}")
-    else:
-        print(f"[Warning] LFW pairs file not found: {args.pairs_file}")
 
     lr_monitor = LearningRateMonitor(logging_interval="epoch")
     callbacks.append(lr_monitor)
@@ -193,21 +184,6 @@ def main():
     ckpt_path = None
     if resume_ckpt_path and os.path.exists(resume_ckpt_path):
         ckpt_path = resume_ckpt_path
-        print(f"[Info] Resuming from checkpoint: {ckpt_path}")
-
-    # 학습 시작
-    print(f"[Info] Starting training with config: {args.config}")
-    print(f"[Info] Output directory: {cfg.output}")
-    print(f"[Info] Network: {cfg.network}")
-    print(f"[Info] Batch size: {cfg.batch_size}")
-    print(f"[Info] Learning rate: {cfg.lr}")
-    print(f"[Info] Epochs: {args.epoch}")
-    print(f"[Info] Number of nodes: {args.num_nodes}")
-    print(f"[Info] Devices per node: {args.devices}")
-    total_gpus = (
-        args.num_nodes * args.devices if isinstance(args.devices, int) else "auto"
-    )
-    print(f"[Info] Total GPUs: {total_gpus}")
 
     trainer.fit(model, datamodule=datamodule, ckpt_path=ckpt_path)
 

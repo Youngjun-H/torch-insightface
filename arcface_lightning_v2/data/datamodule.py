@@ -65,16 +65,9 @@ class ArcFaceDataModule(L.LightningDataModule):
             for root_dir in self.root_dirs:
                 dataset = get_dataset(root_dir)
                 datasets.append(dataset)
-                print(
-                    f"[Info] Loaded dataset from: {root_dir} (samples: {len(dataset)})"
-                )
 
             if len(datasets) > 1:
                 self.train_dataset = ConcatDataset(datasets)
-                total_samples = sum(len(d) for d in datasets)
-                print(
-                    f"[Info] Concatenated {len(datasets)} datasets, total samples: {total_samples}"
-                )
             else:
                 self.train_dataset = datasets[0]
 

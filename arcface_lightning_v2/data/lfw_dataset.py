@@ -45,7 +45,12 @@ class LFWPairsDataset(Dataset):
         self.pairs = self._load_pairs()
 
     def _load_pairs(self) -> List[Tuple[str, str, int]]:
-        """pairs.txt 파일을 읽어서 (path1, path2, label) 리스트 반환"""
+        """
+        pairs.txt 파일을 읽어서 (path1, path2, label) 리스트 반환
+        두 가지 형식 지원:
+        1. <path1> <path2> <label> (기존 형식)
+        2. <label> <path1> <path2> (lfw_ann.txt 형식)
+        """
         pairs = []
 
         with open(self.pairs_file, "r") as f:
@@ -58,10 +63,25 @@ class LFWPairsDataset(Dataset):
                 if len(parts) < 3:
                     continue
 
-                # 형식: <path1> <path2> <label>
-                path1 = parts[0]
-                path2 = parts[1]
-                label = int(parts[2])
+                # 형식 자동 감지: 첫 번째 필드가 숫자(0 또는 1)이고 경로가 아니면 label로 간주
+                # 경로는 보통 '/' 또는 확장자를 포함함
+                first_part = parts[0]
+                is_label_first = (
+                    first_part in ["0", "1"]
+                    and "/" not in first_part
+                    and "." not in first_part
+                )
+
+                if is_label_first:
+                    # 형식: <label> <path1> <path2> (lfw_ann.txt 형식)
+                    label = int(parts[0])
+                    path1 = parts[1]
+                    path2 = parts[2]
+                else:
+                    # 형식: <path1> <path2> <label> (기존 형식)
+                    path1 = parts[0]
+                    path2 = parts[1]
+                    label = int(parts[2])
 
                 # root_dir이 있으면 경로에 추가
                 if self.root_dir:
@@ -78,9 +98,8 @@ class LFWPairsDataset(Dataset):
             img = Image.open(path).convert("RGB")
             img = self.transform(img)
             return img
-        except Exception as e:
+        except Exception:
             # 이미지 로드 실패 시 검은 이미지 반환
-            print(f"Warning: Failed to load image {path}: {e}")
             return torch.zeros(3, *self.image_size)
 
     def __len__(self):
