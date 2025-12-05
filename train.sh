@@ -99,9 +99,8 @@ echo "  - GPUs per node: $ACTUAL_GPUS_PER_NODE"
 echo "  - Total GPUs: $((ACTUAL_NODES * ACTUAL_GPUS_PER_NODE))"
 echo ""
 
-srun python -m arcface_lightning_v2.train \
+srun python -m arcface_lightning.train \
     configs/ms1mv3_r50.py \
-    --pairs_file /purestorage/AILAB/AI_2/yjhwang/work/face/datasets/FACE_VAL/val/lfw_ann.txt \
     --num_nodes ${ACTUAL_NODES} \
     --devices ${ACTUAL_GPUS_PER_NODE} \
     --epoch 20

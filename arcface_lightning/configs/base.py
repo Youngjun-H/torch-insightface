@@ -1,9 +1,5 @@
 from easydict import EasyDict as edict
 
-# make training faster
-# our RAM is 256G
-# mount -t tmpfs -o size=140G  tmpfs /train_tmp
-
 config = edict()
 
 # Margin Base Softmax
@@ -58,3 +54,11 @@ config.wandb_project = "project"
 config.wandb_log_all = True
 config.save_artifacts = False
 config.wandb_resume = False  # resume wandb run: Only if the you wand t resume the last run that it was interrupted
+
+# Face Verification Datasets
+# verification_datasets: List of (filename, dataset_name) tuples
+# 예: [("lfw_ann.txt", "lfw"), ("agedb_30_ann.txt", "agedb_30")]
+config.verification_val_dir = (
+    None  # 검증 데이터셋 루트 디렉토리 (None이면 verification 비활성화)
+)
+config.verification_datasets = []  # [(filename, dataset_name), ...]

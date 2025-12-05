@@ -12,10 +12,10 @@ from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 
 import wandb
-from arcface_lightning_v2.data.datamodule import ArcFaceDataModule
-from arcface_lightning_v2.lightning_utils.callbacks import LFWVerificationCallback
-from arcface_lightning_v2.lightning_utils.config import get_config
-from arcface_lightning_v2.models.module import ArcFaceModule
+from arcface_lightning.data.datamodule import ArcFaceDataModule
+from arcface_lightning.lightning_utils.callbacks import FaceVerificationCallback
+from arcface_lightning.lightning_utils.config import get_config
+from arcface_lightning.models.module import ArcFaceModule
 
 
 def main():
@@ -26,12 +26,6 @@ def main():
         "config",
         type=str,
         help="Config file path (e.g., 'configs/ms1mv3_r50.py')",
-    )
-    parser.add_argument(
-        "--pairs_file",
-        type=str,
-        default="datasets/pairs.txt",
-        help="LFW pairs.txt file path for verification",
     )
     parser.add_argument(
         "--num_nodes",
@@ -115,21 +109,23 @@ def main():
     # Callbacks
     callbacks = []
 
-    # LFW Verification Callback
-    if os.path.exists(args.pairs_file):
-        # annotation 파일의 디렉토리를 root_dir로 설정
-        # 예: /path/to/lfw_ann.txt -> /path/to (이미지 루트 디렉토리)
-        pairs_dir = os.path.dirname(os.path.abspath(args.pairs_file))
-        lfw_callback = LFWVerificationCallback(
-            pairs_file=args.pairs_file,
-            root_dir=pairs_dir,  # annotation 파일과 같은 디렉토리를 이미지 루트로 사용
-            image_size=(112, 112),
-            batch_size=32,
-            num_workers=4,
-            verbose=cfg.verbose,
-            n_folds=10,
-        )
-        callbacks.append(lfw_callback)
+    # Verification Callbacks for multiple datasets
+    if cfg.verification_val_dir and cfg.verification_datasets:
+        for filename, dataset_name in cfg.verification_datasets:
+            pairs_file = os.path.join(cfg.verification_val_dir, filename)
+            if os.path.exists(pairs_file):
+                pairs_dir = os.path.dirname(os.path.abspath(pairs_file))
+                callback = FaceVerificationCallback(
+                    pairs_file=pairs_file,
+                    root_dir=pairs_dir,
+                    image_size=(112, 112),
+                    batch_size=32,
+                    num_workers=4,
+                    verbose=cfg.verbose,
+                    n_folds=10,
+                    dataset_name=dataset_name,
+                )
+                callbacks.append(callback)
 
     lr_monitor = LearningRateMonitor(logging_interval="epoch")
     callbacks.append(lr_monitor)

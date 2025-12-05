@@ -1,6 +1,7 @@
 """
-LFW Verification Dataset
+Face Verification Dataset
 pairs.txt 파일을 읽어서 이미지 쌍과 레이블을 제공
+다양한 얼굴 검증 데이터셋 (LFW, AgeDB-30, CALFW, CPLFW 등) 지원
 """
 
 import os
@@ -13,8 +14,8 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 
-class LFWPairsDataset(Dataset):
-    """LFW pairs.txt 파일을 읽어서 이미지 쌍과 레이블 제공"""
+class VerificationPairsDataset(Dataset):
+    """Face Verification pairs.txt 파일을 읽어서 이미지 쌍과 레이블 제공"""
 
     def __init__(
         self,

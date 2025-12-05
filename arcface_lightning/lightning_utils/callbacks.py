@@ -2,6 +2,7 @@
 Lightning Callbacks for ArcFace Training
 """
 
+import os
 from typing import Optional
 
 import lightning as L
@@ -11,12 +12,12 @@ import torch.nn.functional as F
 from sklearn.metrics import accuracy_score
 from torch.utils.data import DataLoader
 
-from arcface_lightning_v2.data.lfw_dataset import LFWPairsDataset
+from arcface_lightning.data.verification_dataset import VerificationPairsDataset
 
 
-class LFWVerificationCallback(L.Callback):
+class FaceVerificationCallback(L.Callback):
     """
-    LFW 데이터셋을 사용한 Face Verification Callback
+    Face Verification Callback for various datasets (LFW, AgeDB-30, CALFW, CPLFW, etc.)
     주기적으로 모델의 verification accuracy를 계산하고 로깅
 
     지원하는 annotation 파일 형식:
@@ -33,10 +34,11 @@ class LFWVerificationCallback(L.Callback):
         num_workers: int = 4,
         verbose: int = 2000,  # 몇 step마다 실행할지
         n_folds: int = 10,  # K-fold cross validation
+        dataset_name: Optional[str] = None,  # 데이터셋 이름 (로깅용)
     ):
         """
         Args:
-            pairs_file: pairs.txt 또는 lfw_ann.txt 파일 경로
+            pairs_file: pairs.txt 또는 annotation 파일 경로
                        형식: <path1> <path2> <label> 또는 <label> <path1> <path2>
             root_dir: 이미지 루트 디렉토리 (annotation 파일의 경로가 상대 경로인 경우)
             image_size: 이미지 크기
@@ -44,6 +46,7 @@ class LFWVerificationCallback(L.Callback):
             num_workers: DataLoader worker 수
             verbose: 몇 step마다 verification 수행할지 (현재 비활성화됨)
             n_folds: K-fold cross validation fold 수
+            dataset_name: 데이터셋 이름 (로깅 키에 사용, 예: "lfw", "agedb_30", "calfw", "cplfw")
         """
         super().__init__()
         self.pairs_file = pairs_file
@@ -54,6 +57,18 @@ class LFWVerificationCallback(L.Callback):
         self.verbose = verbose
         self.n_folds = n_folds
 
+        # 데이터셋 이름 자동 추출 (파일명에서)
+        if dataset_name is None:
+            filename = os.path.basename(pairs_file)
+            # lfw_ann.txt -> lfw, agedb_30_ann.txt -> agedb_30
+            if "_ann.txt" in filename:
+                dataset_name = filename.replace("_ann.txt", "")
+            elif filename.endswith(".txt"):
+                dataset_name = filename.replace(".txt", "")
+            else:
+                dataset_name = "verification"
+        self.dataset_name = dataset_name.lower()
+
         self.highest_acc = 0.0
         self.dataset = None
         self.dataloader = None
@@ -63,7 +78,7 @@ class LFWVerificationCallback(L.Callback):
     ) -> None:
         """데이터셋 초기화"""
         if self.dataset is None:
-            self.dataset = LFWPairsDataset(
+            self.dataset = VerificationPairsDataset(
                 pairs_file=self.pairs_file,
                 root_dir=self.root_dir,
                 image_size=self.image_size,
@@ -165,21 +180,29 @@ class LFWVerificationCallback(L.Callback):
         # on_step과 on_epoch 파라미터는 호출 컨텍스트에 따라 다르게 설정됨
         # on_train_epoch_end에서는 on_step=False, on_epoch=True만 허용됨
         # on_train_batch_end에서는 on_step=True, on_epoch=False 사용 가능
+        # rank 0에서만 실행하므로 sync_dist=False로 설정 (다른 rank들은 기다리지 않음)
+        log_prefix = f"val/{self.dataset_name}"
         pl_module.log(
-            "val/lfw_accuracy",
+            f"{log_prefix}_accuracy",
             accuracy,
             on_step=on_step,
             on_epoch=on_epoch,
             prog_bar=True,
+            sync_dist=False,  # rank 0에서만 실행하므로 동기화 불필요
         )
         pl_module.log(
-            "val/lfw_threshold", threshold, on_step=on_step, on_epoch=on_epoch
+            f"{log_prefix}_threshold",
+            threshold,
+            on_step=on_step,
+            on_epoch=on_epoch,
+            sync_dist=False,  # rank 0에서만 실행하므로 동기화 불필요
         )
         pl_module.log(
-            "val/lfw_highest_accuracy",
+            f"{log_prefix}_highest_accuracy",
             self.highest_acc,
             on_step=on_step,
             on_epoch=on_epoch,
+            sync_dist=False,  # rank 0에서만 실행하므로 동기화 불필요
         )
 
     def _k_fold_accuracy(

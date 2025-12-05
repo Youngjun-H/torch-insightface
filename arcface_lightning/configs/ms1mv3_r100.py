@@ -1,9 +1,5 @@
 from easydict import EasyDict as edict
 
-# make training faster
-# our RAM is 256G
-# mount -t tmpfs -o size=140G  tmpfs /train_tmp
-
 config = edict()
 config.margin_list = (1.0, 0.5, 0.0)
 config.network = "r100"
@@ -28,5 +24,14 @@ config.num_classes = 96794
 config.num_image = 6489674
 config.num_epoch = 20
 config.warmup_epoch = 0
-# config.val_targets = ["lfw", "cfp_fp", "agedb_30"]
-config.val_targets = ["lfw"]
+
+# Face Verification Datasets
+config.verification_val_dir = (
+    "/purestorage/AILAB/AI_2/yjhwang/work/face/datasets/FACE_VAL/val"
+)
+config.verification_datasets = [
+    ("lfw_ann.txt", "lfw"),
+    ("agedb_30_ann.txt", "agedb_30"),
+    ("calfw_ann.txt", "calfw"),
+    ("cplfw_ann.txt", "cplfw"),
+]
