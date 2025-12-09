@@ -4,7 +4,7 @@ config = edict()
 config.margin_list = (1.0, 0.5, 0.0)
 config.network = "r50"
 config.resume = False
-config.output = "outputs/1205_r50_bs256_e20_4val"
+config.output = "outputs/1205_r50_bs256_e20_4val_ms1m_casia_vgg2face_asian"
 config.embedding_size = 512
 config.sample_rate = 1.0
 config.fp16 = True
@@ -18,13 +18,13 @@ config.dali = False
 # 단일 데이터셋 경로 (문자열)
 config.rec = [
     "/purestorage/AILAB/AI_2/yjhwang/work/face/datasets/ms1m-arcface",
-    # "/purestorage/AILAB/AI_2/yjhwang/work/face/datasets/casia_webface",
-    # "/purestorage/AILAB/AI_2/yjhwang/work/face/datasets/vgg2face_train",
-    # "/purestorage/AILAB/AI_2/yjhwang/work/face/datasets/asian_celeb_112x112_folders",
+    "/purestorage/AILAB/AI_2/yjhwang/work/face/datasets/casia_webface",
+    "/purestorage/AILAB/AI_2/yjhwang/work/face/datasets/vgg2face_train",
+    "/purestorage/AILAB/AI_2/yjhwang/work/face/datasets/asian_celeb_112x112_folders",
 ]
 
-config.num_classes = 85742
-config.num_image = 5822623
+config.num_classes = 191253
+config.num_image = 9319820
 config.num_epoch = 20
 config.warmup_epoch = 0
 

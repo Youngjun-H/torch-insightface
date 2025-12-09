@@ -99,12 +99,15 @@ class CombinedMarginLoss(torch.nn.Module):
             logits = logits * self.s
 
         elif self.m3 > 0:
-            # CosFace
-            target_logit = logits[index_positive, labels[index_positive].view(-1)]
-            final_target_logit = target_logit - self.m3
-            # dtype 일치: logits가 bf16이면 final_target_logit도 bf16으로 변환
-            final_target_logit = final_target_logit.to(dtype=logits.dtype)
-            logits[index_positive, labels[index_positive].view(-1)] = final_target_logit
+            # CosFace: cosine - (one_hot * m)
+            # 제공된 CosFace 코드와 동일한 방식으로 구현
+            one_hot = torch.zeros(logits.size(), device=logits.device, dtype=logits.dtype)
+            labels_positive = labels[index_positive]
+            if labels_positive.dim() > 1:
+                labels_positive = labels_positive.squeeze(1)
+            # index_positive에 해당하는 샘플들에만 one-hot 적용
+            one_hot[index_positive].scatter_(1, labels_positive.view(-1, 1).long(), 1.0)
+            logits = logits - (one_hot * self.m3)
             logits = logits * self.s
         else:
             raise ValueError(

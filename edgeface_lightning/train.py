@@ -64,7 +64,7 @@ def main():
         sample_rate=cfg.sample_rate,
         optimizer=cfg.optimizer,
         lr=cfg.lr,
-        momentum=cfg.momentum,
+        momentum=getattr(cfg, 'momentum', 0.9),  # SGD용, AdamW에서는 사용 안 함
         weight_decay=cfg.weight_decay,
         num_image=cfg.num_image,
         num_epoch=args.epoch or cfg.num_epoch,

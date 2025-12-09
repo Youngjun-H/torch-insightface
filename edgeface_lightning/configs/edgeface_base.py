@@ -1,17 +1,24 @@
 from easydict import EasyDict as edict
 
 config = edict()
-config.margin_list = (1.0, 0.5, 0.0)
+# CosFace loss 사용: margin_list = (m1, m2, m3) where m3 > 0
+config.margin_list = (1.0, 0.0, 0.35)  # CosFace: m1=1.0, m2=0.0, m3=0.35 / ArcFace: m1=1.0, m2=0.5, m3=0.0
 config.network = "edgeface_base"  # EdgeFace Base
 config.resume = False
 config.output = "outputs/edgeface_base_bs256_e20"
 config.embedding_size = 512
 config.sample_rate = 1.0
 config.fp16 = True
-config.momentum = 0.9
-config.weight_decay = 5e-4
-config.batch_size = 256
-config.lr = 0.1
+# AdamW 설정 (base.py에서 상속받지만 명시적으로 설정)
+config.optimizer = "adamw"
+config.lr = 0.001  # AdamW용 learning rate
+config.weight_decay = 0.01  # AdamW용 weight decay (0.1은 너무 큼, 0.01로 수정)
+config.batch_size = 512
+# SGD 설정 (주석 처리)
+# config.optimizer = "sgd"
+# config.momentum = 0.9
+# config.weight_decay = 5e-4
+# config.lr = 0.1
 config.verbose = 2000
 config.dali = False
 
