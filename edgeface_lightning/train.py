@@ -1,5 +1,6 @@
 """
 EdgeFace Training Script with PyTorch Lightning
+Gamma 0.6 Model
 """
 
 import argparse
@@ -8,23 +9,35 @@ from datetime import datetime
 
 import lightning as L
 import torch
+from data.datamodule import EdgeFaceDataModule
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
+from lightning_utils.callbacks import FaceVerificationCallback
+from lightning_utils.config import get_config
+from models.module import EdgeFaceModule
 
 import wandb
-from edgeface_lightning.data.datamodule import EdgeFaceDataModule
-from edgeface_lightning.lightning_utils.callbacks import FaceVerificationCallback
-from edgeface_lightning.lightning_utils.config import get_config
-from edgeface_lightning.models.module import EdgeFaceModule
 
 
 def main():
-    parser = argparse.ArgumentParser(description="EdgeFace Training with PyTorch Lightning")
-    parser.add_argument("config", type=str, help="Config file path (e.g., 'configs/edgeface_xs.py')")
+    parser = argparse.ArgumentParser(
+        description="EdgeFace Training with PyTorch Lightning"
+    )
+    parser.add_argument(
+        "config",
+        type=str,
+        help="Config file path (e.g., 'configs/edgeface_xs_gamma_06.py')",
+    )
     parser.add_argument("--num_nodes", type=int, default=None, help="Number of nodes")
-    parser.add_argument("--devices", type=int, default=None, help="Number of GPUs per node")
-    parser.add_argument("--saveckp_freq", type=int, default=1, help="Save checkpoint every N epochs")
-    parser.add_argument("--epoch", type=int, default=None, help="Number of training epochs")
+    parser.add_argument(
+        "--devices", type=int, default=None, help="Number of GPUs per node"
+    )
+    parser.add_argument(
+        "--saveckp_freq", type=int, default=1, help="Save checkpoint every N epochs"
+    )
+    parser.add_argument(
+        "--epoch", type=int, default=None, help="Number of training epochs"
+    )
     args = parser.parse_args()
 
     # Config 로드
@@ -64,7 +77,7 @@ def main():
         sample_rate=cfg.sample_rate,
         optimizer=cfg.optimizer,
         lr=cfg.lr,
-        momentum=getattr(cfg, 'momentum', 0.9),  # SGD용, AdamW에서는 사용 안 함
+        momentum=getattr(cfg, "momentum", 0.9),
         weight_decay=cfg.weight_decay,
         num_image=cfg.num_image,
         num_epoch=args.epoch or cfg.num_epoch,
@@ -114,7 +127,12 @@ def main():
     )
 
     # Logger
-    loggers = [WandbLogger(project="EdgeFace-Lightning", name=f"{datetime.now().strftime('%y%m%d_%H%M')}")]
+    loggers = [
+        WandbLogger(
+            project="EdgeFace-Lightning",
+            name=f"{datetime.now().strftime('%y%m%d_%H%M')}",
+        )
+    ]
 
     # Trainer
     trainer = L.Trainer(
@@ -135,11 +153,18 @@ def main():
     )
 
     # Training 시작
-    trainer.fit(model, datamodule=datamodule, ckpt_path=resume_ckpt_path if resume_ckpt_path and os.path.exists(resume_ckpt_path) else None)
+    trainer.fit(
+        model,
+        datamodule=datamodule,
+        ckpt_path=(
+            resume_ckpt_path
+            if resume_ckpt_path and os.path.exists(resume_ckpt_path)
+            else None
+        ),
+    )
 
 
 if __name__ == "__main__":
     torch.set_float32_matmul_precision("medium")
     wandb.login(key="53f960c86b81377b89feb5d30c90ddc6c3810d3a")
     main()
-

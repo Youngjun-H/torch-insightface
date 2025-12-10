@@ -1,5 +1,5 @@
 """
-EdgeFace Lightning Module
+EdgeFace Lightning Module for Gamma 0.6 Model
 """
 
 import os
@@ -16,13 +16,13 @@ from .partial_fc_v2 import PartialFC_V2
 
 class EdgeFaceModule(L.LightningModule):
     """
-    EdgeFace Lightning Module
+    EdgeFace Lightning Module for Gamma 0.6 Model
     """
 
     def __init__(
         self,
         # Backbone
-        network: str = "edgeface_xs_gamma_06",  # EdgeFace 모델 이름
+        network: str = "edgeface_xs_gamma_06",
         embedding_size: int = 512,
         # Loss
         margin_list: tuple = (1.0, 0.5, 0.0),  # (m1, m2, m3)
@@ -49,10 +49,10 @@ class EdgeFaceModule(L.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        # Backbone - EdgeFace 모델 사용
+        # Backbone - EdgeFace Gamma 0.6 모델 사용
         self.backbone = get_model(
             network,
-            num_features=embedding_size,  # Lightning 호환
+            num_features=embedding_size,
             batchnorm=False,
         )
 
@@ -138,7 +138,6 @@ class EdgeFaceModule(L.LightningModule):
             )
 
         # Optimizer 설정
-        # Partial FC의 파라미터는 마지막에 위치해야 함
         params = [
             {"params": backbone_params, "name": "backbone"},
             {"params": partial_fc_params, "name": "partial_fc"},
@@ -161,9 +160,7 @@ class EdgeFaceModule(L.LightningModule):
             raise ValueError(f"Unknown optimizer: {self.optimizer_name}")
 
         # Learning rate scheduler 설정
-        # Total batch size 계산 (world_size는 Lightning이 자동 처리)
         world_size = self.trainer.world_size if self.trainer else 1
-        # gradient accumulation도 고려
         gradient_accumulation_steps = (
             getattr(self.trainer, "accumulate_grad_batches", 1) if self.trainer else 1
         )
@@ -176,14 +173,14 @@ class EdgeFaceModule(L.LightningModule):
             optimizer=optimizer,
             warmup_iters=warmup_step,
             total_iters=total_step,
-            power=2.0,  # polynomial power
+            power=2.0,
         )
 
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "interval": "step",  # step마다 업데이트
+                "interval": "step",
                 "frequency": 1,
             },
         }
@@ -210,13 +207,12 @@ class EdgeFaceModule(L.LightningModule):
 
         # PartialFC gradient 확인 및 clipping
         if self.partial_fc._initialized and self.partial_fc.weight is not None:
-            # PartialFC weight에 gradient가 있는지 확인
             if self.partial_fc.weight.grad is not None:
                 partial_fc_norm = torch.nn.utils.clip_grad_norm_(
                     self.partial_fc.parameters(), 5.0
                 )
 
-                # 주기적으로 로깅 (매 100 step마다)
+                # 주기적으로 로깅
                 if self.global_step % 100 == 0:
                     self.log("grad_norm/backbone", backbone_norm, on_step=True)
                     self.log("grad_norm/partial_fc", partial_fc_norm, on_step=True)
@@ -226,13 +222,11 @@ class EdgeFaceModule(L.LightningModule):
                     weight_std = self.partial_fc.weight.data.std().item()
                     self.log("partial_fc/weight_mean", weight_mean, on_step=True)
                     self.log("partial_fc/weight_std", weight_std, on_step=True)
-
             else:
-                # ⚠️ 경고: PartialFC weight에 gradient가 없음
                 if self.global_step % 100 == 0:
                     self.log("grad_norm/partial_fc", 0.0, on_step=True)
 
     @property
     def _ddp_params_and_buffers_to_ignore(self):
-        """DDP에서 PartialFC 파라미터 제외 (각 GPU마다 다른 weight shape)"""
+        """DDP에서 PartialFC 파라미터 제외"""
         return ["partial_fc.weight"]

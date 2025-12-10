@@ -1,3 +1,0 @@
-"""
-Lightning utilities package
-"""

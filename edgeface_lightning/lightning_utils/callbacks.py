@@ -12,7 +12,12 @@ import torch.nn.functional as F
 from sklearn.metrics import accuracy_score
 from torch.utils.data import DataLoader
 
-from edgeface_lightning.data.verification_dataset import VerificationPairsDataset
+# new 디렉토리를 모듈로 실행할 때와 직접 실행할 때 모두 지원
+try:
+    from data.verification_dataset import VerificationPairsDataset
+except ImportError:
+    # python -m new.train으로 실행할 때
+    from new.data.verification_dataset import VerificationPairsDataset
 
 
 class FaceVerificationCallback(L.Callback):

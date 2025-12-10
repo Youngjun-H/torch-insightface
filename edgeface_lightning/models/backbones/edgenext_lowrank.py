@@ -1,6 +1,7 @@
 """
-EdgeNeXt XS Gamma 0.6 Model Implementation
-모든 Linear 레이어를 LoRaLin으로 대체한 버전
+EdgeNeXt Model Implementation with Low-rank Linear (LoRaLin)
+모든 Linear 레이어를 LoRaLin으로 대체한 EdgeNeXt 모델 구현
+지원 모델: X-Small, Small, Base
 """
 
 import math
@@ -646,6 +647,22 @@ class TimmFRWrapperV2(nn.Module):
                 num_classes=featdim,
                 rank_ratio=rank_ratio,
             )
+        elif model_name == "edgenext_small":
+            self.model = EdgeNeXt(
+                dims=[48, 96, 192, 384],
+                depths=[3, 3, 9, 3],
+                kernel_sizes=[3, 5, 7, 9],
+                num_classes=featdim,
+                rank_ratio=rank_ratio,
+            )
+        elif model_name == "edgenext_base":
+            self.model = EdgeNeXt(
+                dims=[80, 160, 288, 584],
+                depths=[3, 3, 9, 3],
+                kernel_sizes=[3, 5, 7, 9],
+                num_classes=featdim,
+                rank_ratio=rank_ratio,
+            )
         else:
             raise ValueError(f"Unknown model name: {model_name}")
 
@@ -662,3 +679,24 @@ def edgenext_xs_gamma_06(featdim=512, rank_ratio=0.6):
     return TimmFRWrapperV2(
         model_name="edgenext_x_small", featdim=featdim, rank_ratio=rank_ratio
     )
+
+
+def edgenext_s_gamma_05(featdim=512, rank_ratio=0.5):
+    """
+    EdgeNeXt Small Gamma 0.5 model
+    모든 Linear 레이어를 LoRaLin으로 대체한 버전 (rank_ratio=0.5)
+    """
+    return TimmFRWrapperV2(
+        model_name="edgenext_small", featdim=featdim, rank_ratio=rank_ratio
+    )
+
+
+def edgenext_base(featdim=512, rank_ratio=1.0):
+    """
+    EdgeNeXt Base model
+    모든 Linear 레이어를 LoRaLin으로 대체한 버전 (rank_ratio=1.0, 즉 일반 Linear)
+    """
+    return TimmFRWrapperV2(
+        model_name="edgenext_base", featdim=featdim, rank_ratio=rank_ratio
+    )
+

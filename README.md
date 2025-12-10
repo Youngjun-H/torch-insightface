@@ -1,8 +1,20 @@
-# ArcFace Training
+# Face Recognition Training
 
-PyTorch Lightning 기반 ArcFace 얼굴 인식 모델 학습
+PyTorch Lightning 기반 얼굴 인식 모델 학습 (ArcFace, EdgeFace)
 
 ## 빠른 시작
+
+### ArcFace 학습
+
+```bash
+python -m arcface_lightning.train configs/ms1mv3_r50.py --epoch 20
+```
+
+### EdgeFace 학습
+
+```bash
+python -m edgeface_lightning.train configs/edgeface_xs.py --epoch 20
+```
 
 ### SLURM 환경에서 학습
 
@@ -17,26 +29,24 @@ sbatch train.sh
 #SBATCH --ntasks-per-node=8          # 노드당 태스크 수
 ```
 
-### 로컬 환경에서 학습
-
-```bash
-python -m arcface_lightning_v2.train \
-    configs/ms1mv3_r50.py \
-    --pairs_file /path/to/lfw_ann.txt \
-    --epoch 20
-```
-
 ## 주요 옵션
 
-- `--pairs_file`: LFW 검증용 annotation 파일 경로
-- `--num_nodes`: 노드 수 (SLURM 자동 감지)
-- `--devices`: 노드당 GPU 수 (SLURM 자동 감지)
+- `config`: Config 파일 경로 (필수)
+- `--num_nodes`: 노드 수
+- `--devices`: 노드당 GPU 수
 - `--epoch`: 학습 epoch 수
 - `--saveckp_freq`: 체크포인트 저장 주기 (기본: 1 epoch)
+
+## EdgeFace 모델 변형
+
+- `edgeface_xs_gamma_06`: X-Small with low-rank (rank_ratio=0.6)
+- `edgeface_s_gamma_05`: Small with low-rank (rank_ratio=0.5)
+- `edgeface_xxs`: XX-Small
+- `edgeface_base`: Base
 
 ## 출력
 
 - 체크포인트: `outputs/{config_name}/checkpoints/`
 - 로그: WandB에 자동 업로드
-- LFW 검증: 매 epoch 종료 시 자동 평가
+- Verification: 매 epoch 종료 시 자동 평가 (LFW, AgeDB-30, CALFW, CPLFW)
 

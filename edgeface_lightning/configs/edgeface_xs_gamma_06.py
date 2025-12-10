@@ -15,15 +15,17 @@ config.fp16 = True
 
 # AdamW 설정
 config.optimizer = "adamw"
-config.lr = 0.005  # AdamW용 learning rate
+# config.lr = 0.01  # AdamW용 learning rate
+config.lr = 0.005  # AdamW용 learning rate (Default)
 config.weight_decay = 0.01  # AdamW용 weight decay
-config.batch_size = 512
+config.batch_size = 128
 
 # SGD 설정 (주석 처리)
 # config.optimizer = "sgd"
 # config.momentum = 0.9
 # config.weight_decay = 5e-4
 # config.lr = 0.1
+# config.batch_size = 512
 
 config.verbose = 2000
 config.dali = False
