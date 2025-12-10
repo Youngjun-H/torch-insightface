@@ -4,9 +4,7 @@ config = edict()
 
 # CosFace loss 사용: margin_list = (m1, m2, m3) where m3 > 0
 config.margin_list = (1.0, 0.0, 0.35)  # CosFace: m1=1.0, m2=0.0, m3=0.35
-config.network = (
-    "edgeface_s_gamma_05"  # EdgeFace Small with low-rank (rank_ratio=0.5)
-)
+config.network = "edgeface_s_gamma_05"  # EdgeFace Small with low-rank (rank_ratio=0.5)
 config.resume = False
 config.output = "outputs/edgeface_s_gamma_05_bs512_e50"
 config.embedding_size = 512
@@ -18,7 +16,7 @@ config.optimizer = "adamw"
 # config.lr = 0.01  # AdamW용 learning rate
 config.lr = 0.005  # AdamW용 learning rate (Default)
 config.weight_decay = 0.01  # AdamW용 weight decay
-config.batch_size = 128
+config.batch_size = 256
 
 # SGD 설정 (주석 처리)
 # config.optimizer = "sgd"
@@ -58,4 +56,3 @@ config.verification_datasets = [
     ("calfw_ann.txt", "calfw"),
     ("cplfw_ann.txt", "cplfw"),
 ]
-

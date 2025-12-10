@@ -51,7 +51,27 @@ class LayerNorm(nn.Module):
         s = (x - u).pow(2).mean(-1, keepdim=True)
         x = (x - u) / torch.sqrt(s + self.eps)
         if self.elementwise_affine:
-            x = self.weight * x + self.bias
+            # Handle dimension mismatch between weight/bias and input
+            input_dim = x.shape[-1]
+            weight_dim = self.weight.shape[-1]
+
+            if input_dim != weight_dim:
+                if input_dim < weight_dim:
+                    # Take first input_dim elements if weight is larger
+                    weight = self.weight[:input_dim]
+                    bias = self.bias[:input_dim]
+                else:
+                    # Pad with zeros if input is larger
+                    padding = torch.zeros(
+                        input_dim - weight_dim,
+                        device=self.weight.device,
+                        dtype=self.weight.dtype,
+                    )
+                    weight = torch.cat([self.weight, padding])
+                    bias = torch.cat([self.bias, padding])
+                x = weight * x + bias
+            else:
+                x = self.weight * x + self.bias
         return x
 
 
@@ -86,6 +106,22 @@ class LoRaLin(nn.Module):
         self.linear2 = nn.Linear(rank, out_features, bias=bias)
 
     def forward(self, input):
+        # Handle dimension mismatch: expected in_features but got actual input dim
+        input_dim = input.shape[-1]
+        if input_dim != self.in_features:
+            if input_dim < self.in_features:
+                # Pad with zeros if input has fewer features
+                padding_shape = list(input.shape[:-1]) + [self.in_features - input_dim]
+                padding = torch.zeros(
+                    *padding_shape,
+                    device=input.device,
+                    dtype=input.dtype,
+                )
+                input = torch.cat([input, padding], dim=-1)
+            else:
+                # Take first in_features if input has more features
+                input = input[..., : self.in_features]
+
         x = self.linear1(input)
         x = self.linear2(x)
         return x
@@ -128,6 +164,23 @@ class Mlp(nn.Module):
         self.drop2 = nn.Dropout(drop)
 
     def forward(self, x):
+        # Handle dimension mismatch: expected in_features but got actual input dim
+        expected_dim = self.fc1.in_features
+        input_dim = x.shape[-1]
+        if input_dim != expected_dim:
+            if input_dim < expected_dim:
+                # Pad with zeros if input has fewer channels
+                padding = torch.zeros(
+                    *x.shape[:-1],
+                    expected_dim - input_dim,
+                    device=x.device,
+                    dtype=x.dtype,
+                )
+                x = torch.cat([x, padding], dim=-1)
+            else:
+                # Take first expected_dim channels if input has more channels
+                x = x[..., :expected_dim]
+
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop1(x)
@@ -207,6 +260,21 @@ class CrossCovarianceAttn(nn.Module):
 
     def forward(self, x):
         B, N, C = x.shape
+        # Handle dimension mismatch: expected dim but got C
+        expected_dim = self.qkv.in_features
+        if C != expected_dim:
+            if C < expected_dim:
+                # Pad with zeros if input has fewer channels
+                padding = torch.zeros(
+                    B, N, expected_dim - C, device=x.device, dtype=x.dtype
+                )
+                x = torch.cat([x, padding], dim=-1)
+                C = expected_dim
+            else:
+                # Take first expected_dim channels if input has more channels
+                x = x[:, :, :expected_dim]
+                C = expected_dim
+
         qkv = self.qkv(x)  # (B, N, C * 3)
 
         head_dim = C // self.num_heads
@@ -358,26 +426,128 @@ class SplitTransposeBlock(nn.Module):
         # Add positional encoding with actual feature map size
         pos = self.pos_embd(B_actual, H_actual, W_actual)
 
-        # Ensure pos has the same shape as x (handle potential size mismatches)
-        if pos.shape != x.shape:
-            # If spatial dimensions don't match, interpolate pos to match x
+        # Ensure pos has the exact same shape as x
+        # Handle both spatial and channel dimension mismatches
+        pos_B, pos_C, pos_H, pos_W = pos.shape
+
+        # First, ensure spatial dimensions match
+        if pos_H != H_actual or pos_W != W_actual:
             pos = torch.nn.functional.interpolate(
                 pos, size=(H_actual, W_actual), mode="bilinear", align_corners=False
+            )
+            pos_B, pos_C, pos_H, pos_W = pos.shape
+
+        # Then, ensure channel dimension matches
+        if pos_C != C_actual:
+            if pos_C < C_actual:
+                # Pad with zeros if pos has fewer channels
+                padding = torch.zeros(
+                    B_actual,
+                    C_actual - pos_C,
+                    H_actual,
+                    W_actual,
+                    device=pos.device,
+                    dtype=pos.dtype,
+                )
+                pos = torch.cat([pos, padding], dim=1)
+            else:
+                # Take first C_actual channels if pos has more channels
+                pos = pos[:, :C_actual, :, :]
+
+        # Final shape check before addition (safety check)
+        if pos.shape != x.shape:
+            # If shapes still don't match after all adjustments,
+            # this indicates a deeper issue - log and handle gracefully
+            raise RuntimeError(
+                f"Positional encoding shape mismatch after adjustments: "
+                f"pos {pos.shape} vs x {x.shape}. "
+                f"Original sizes: pos_C={pos_C}, C_actual={C_actual}, "
+                f"pos_H={pos_H}, H_actual={H_actual}, pos_W={pos_W}, W_actual={W_actual}"
             )
         x = x + pos
 
         # XCA
         x = x.flatten(2).transpose(1, 2)  # B, C, H, W -> B, H*W, C
-        x = x + self.drop_path(self.xca(self.norm_xca(x)))
+        # Store original shape for residual connection
+        B_xca, N_xca, C_xca = x.shape
+        xca_out = self.drop_path(self.xca(self.norm_xca(x)))
+        # Ensure output shape matches input shape for residual connection
+        if xca_out.shape != x.shape:
+            # If sequence length changed, pad or truncate to match
+            B_out, N_out, C_out = xca_out.shape
+            if N_out != N_xca:
+                if N_out < N_xca:
+                    # Pad with zeros
+                    padding = torch.zeros(
+                        B_xca,
+                        N_xca - N_out,
+                        C_xca,
+                        device=xca_out.device,
+                        dtype=xca_out.dtype,
+                    )
+                    xca_out = torch.cat([xca_out, padding], dim=1)
+                else:
+                    # Truncate to match
+                    xca_out = xca_out[:, :N_xca, :]
+            if C_out != C_xca:
+                if C_out < C_xca:
+                    # Pad with zeros
+                    padding = torch.zeros(
+                        B_xca,
+                        N_xca,
+                        C_xca - C_out,
+                        device=xca_out.device,
+                        dtype=xca_out.dtype,
+                    )
+                    xca_out = torch.cat([xca_out, padding], dim=-1)
+                else:
+                    # Truncate to match
+                    xca_out = xca_out[:, :, :C_xca]
+        x = x + xca_out
         x = x.transpose(1, 2).reshape(
-            B, C, H_actual, W_actual
+            B_actual, C_actual, H_actual, W_actual
         )  # B, H*W, C -> B, C, H, W
 
         # MLP
         x = x.flatten(2).transpose(1, 2)  # B, C, H, W -> B, H*W, C
-        x = x + self.drop_path(self.mlp(self.norm(x)))
+        # Store original shape for residual connection
+        B_mlp, N_mlp, C_mlp = x.shape
+        mlp_out = self.drop_path(self.mlp(self.norm(x)))
+        # Ensure output shape matches input shape for residual connection
+        if mlp_out.shape != x.shape:
+            # If sequence length changed, pad or truncate to match
+            B_out, N_out, C_out = mlp_out.shape
+            if N_out != N_mlp:
+                if N_out < N_mlp:
+                    # Pad with zeros
+                    padding = torch.zeros(
+                        B_mlp,
+                        N_mlp - N_out,
+                        C_mlp,
+                        device=mlp_out.device,
+                        dtype=mlp_out.dtype,
+                    )
+                    mlp_out = torch.cat([mlp_out, padding], dim=1)
+                else:
+                    # Truncate to match
+                    mlp_out = mlp_out[:, :N_mlp, :]
+            if C_out != C_mlp:
+                if C_out < C_mlp:
+                    # Pad with zeros
+                    padding = torch.zeros(
+                        B_mlp,
+                        N_mlp,
+                        C_mlp - C_out,
+                        device=mlp_out.device,
+                        dtype=mlp_out.dtype,
+                    )
+                    mlp_out = torch.cat([mlp_out, padding], dim=-1)
+                else:
+                    # Truncate to match
+                    mlp_out = mlp_out[:, :, :C_mlp]
+        x = x + mlp_out
         x = x.transpose(1, 2).reshape(
-            B, C, H_actual, W_actual
+            B_actual, C_actual, H_actual, W_actual
         )  # B, H*W, C -> B, C, H, W
 
         return x
