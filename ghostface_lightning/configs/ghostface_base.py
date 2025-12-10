@@ -9,7 +9,7 @@ config.resume = False
 config.output = "outputs/ghostface_v1_bs256_e50"
 config.embedding_size = 512
 config.width = 1.3
-config.strides = 2
+config.strides = 1
 config.use_prelu = False
 
 # Loss 설정
@@ -30,7 +30,7 @@ config.weight_decay = 5e-4
 config.batch_size = 256
 
 # Learning rate scheduler
-config.lr_decay_type = "polynomial"  # "polynomial", "cosine", "exponential"
+config.lr_decay_type = "cosine"  # "polynomial", "cosine", "exponential"
 config.lr_decay_steps = 0
 config.lr_min = 1e-6
 
@@ -45,8 +45,8 @@ config.rec = [
     "/purestorage/AILAB/AI_2/yjhwang/work/face/datasets/ms1m-arcface",
 ]
 
-config.num_classes = 93431
-config.num_image = 5179510
+config.num_classes = 85742
+config.num_image = 5822653
 config.num_epoch = 50
 config.warmup_epoch = 2
 config.random_status = 2  # Augmentation 강도
@@ -61,4 +61,3 @@ config.verification_datasets = [
     ("calfw_ann.txt", "calfw"),
     ("cplfw_ann.txt", "cplfw"),
 ]
-

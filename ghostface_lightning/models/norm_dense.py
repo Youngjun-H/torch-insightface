@@ -34,10 +34,18 @@ class NormDense(nn.Module):
 
     def forward(self, x):
         # L2 normalize weights and inputs
-        norm_weight = F.normalize(self.weight, p=2, dim=1, eps=1e-5)
+        # Original: norm_w = tf.nn.l2_normalize(self.w, axis=0, epsilon=1e-5)
+        # axis=0 means normalize each column (each feature dimension)
+        # In PyTorch: weight shape is (out_features, in_features), so dim=0 normalizes each column
+        norm_weight = F.normalize(self.weight, p=2, dim=0, eps=1e-5)
+        # Original: norm_inputs = tf.nn.l2_normalize(inputs, axis=1, epsilon=1e-5)
+        # axis=1 means normalize each row (each sample)
         norm_inputs = F.normalize(x, p=2, dim=1, eps=1e-5)
 
         # Compute dot product
+        # Original: output = K.dot(norm_inputs, norm_w)
+        # norm_inputs: (batch_size, in_features), norm_w: (in_features, out_features)
+        # In PyTorch: norm_inputs @ norm_weight.t() = (batch_size, in_features) @ (in_features, out_features)
         output = F.linear(norm_inputs, norm_weight, self.bias)
 
         # Top-K max pooling if loss_top_k > 1
@@ -106,7 +114,9 @@ class NormDenseVPL(NormDense):
         self.norm_features[: x.size(0)] = norm_inputs
 
         # Normalize weights
-        norm_w = F.normalize(self.weight, p=2, dim=1, eps=1e-5)
+        # Original: norm_w = tf.nn.l2_normalize(self.w, axis=0, epsilon=1e-5)
+        # axis=0 means normalize each column (each feature dimension)
+        norm_w = F.normalize(self.weight, p=2, dim=0, eps=1e-5)
 
         # Inject queue features
         queue_lambda_expanded = queue_lambda.unsqueeze(1)  # [out_features, 1]

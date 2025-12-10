@@ -10,7 +10,13 @@ import torch
 import torch.nn as nn
 
 from .backbones import get_model
-from .losses import CombinedMarginLoss, ArcFaceLoss, CosFaceLoss, AdaFaceLoss, MagFaceLoss
+from .losses import (
+    AdaFaceLoss,
+    ArcFaceLoss,
+    CombinedMarginLoss,
+    CosFaceLoss,
+    MagFaceLoss,
+)
 from .norm_dense import NormDense, NormDenseVPL
 
 
@@ -18,7 +24,7 @@ class GhostFaceModule(L.LightningModule):
     """
     GhostFaceNets Lightning Module
     """
-    
+
     def __init__(
         self,
         # Backbone
@@ -68,7 +74,7 @@ class GhostFaceModule(L.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters()
-        
+
         # Backbone
         self.backbone = get_model(
             network,
@@ -76,11 +82,11 @@ class GhostFaceModule(L.LightningModule):
             width=width,
             strides=strides,
         )
-        
+
         # Replace ReLU with PReLU if needed
         if use_prelu:
             self._replace_relu_with_prelu()
-        
+
         # Classification head
         self.use_norm_dense = use_norm_dense
         if use_norm_dense:
@@ -104,7 +110,7 @@ class GhostFaceModule(L.LightningModule):
                 )
         else:
             self.classifier = nn.Linear(embedding_size, num_classes)
-        
+
         # Loss function
         self.loss_type = loss_type
         if loss_type == "arcface":
@@ -146,14 +152,14 @@ class GhostFaceModule(L.LightningModule):
                 m3=margin_list[2],
                 label_smoothing=label_smoothing,
             )
-        
+
         # Training parameters
         self.optimizer_name = optimizer
         self.lr = lr
         self.momentum = momentum
         self.weight_decay = weight_decay
         self.gradient_acc = gradient_acc
-        
+
         # Learning rate scheduler parameters
         self.num_image = num_image
         self.num_epoch = num_epoch
@@ -162,41 +168,69 @@ class GhostFaceModule(L.LightningModule):
         self.lr_decay_type = lr_decay_type
         self.lr_decay_steps = lr_decay_steps
         self.lr_min = lr_min
-        
+
         # Resume
         self.resume_path = resume
-    
+
     def _replace_relu_with_prelu(self):
         """Replace ReLU with PReLU in backbone"""
+
         def replace_relu(module):
             for name, child in module.named_children():
                 if isinstance(child, nn.ReLU):
                     setattr(module, name, nn.PReLU(num_parameters=1))
                 else:
                     replace_relu(child)
+
         replace_relu(self.backbone)
-    
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through backbone"""
         return self.backbone(x)
-    
+
     def training_step(self, batch, batch_idx):
         """Training step"""
         img, labels = batch
-        
+
         # Embedding 추출
         embeddings = self.backbone(img)
-        
+
         # Classification head
         logits = self.classifier(embeddings)
-        
+
         # Loss 계산
-        if self.loss_type in ["adaface", "magface"] and hasattr(self.classifier, 'append_norm') and self.classifier.append_norm:
+        if (
+            self.loss_type in ["adaface", "magface"]
+            and hasattr(self.classifier, "append_norm")
+            and self.classifier.append_norm
+        ):
             # Loss functions that need feature norm
             loss = self.loss_fn(logits, labels)
         else:
             loss = self.loss_fn(logits, labels)
-        
+
+        # 디버깅: loss 값이 정상 범위인지 확인
+        # ArcFace loss에서 num_classes가 매우 클 때 초기 loss는 높을 수 있지만,
+        # 학습이 진행되면 감소해야 합니다.
+        if self.global_step % 100 == 0:
+            # Log additional debugging info
+            with torch.no_grad():
+                # Logits 통계
+                logits_mean = logits.mean().item()
+                logits_std = logits.std().item()
+                logits_max = logits.max().item()
+                logits_min = logits.min().item()
+
+                # Target logits 통계
+                target_logits = logits[torch.arange(logits.size(0)), labels]
+                target_mean = target_logits.mean().item()
+
+                self.log("debug/logits_mean", logits_mean, on_step=True)
+                self.log("debug/logits_std", logits_std, on_step=True)
+                self.log("debug/logits_max", logits_max, on_step=True)
+                self.log("debug/logits_min", logits_min, on_step=True)
+                self.log("debug/target_logits_mean", target_mean, on_step=True)
+
         # Logging
         self.log(
             "train_loss",
@@ -207,9 +241,9 @@ class GhostFaceModule(L.LightningModule):
             logger=True,
             sync_dist=True,
         )
-        
+
         return loss
-    
+
     def configure_optimizers(self):
         """Configure optimizer and learning rate scheduler"""
         # Optimizer 설정
@@ -217,7 +251,7 @@ class GhostFaceModule(L.LightningModule):
             {"params": self.backbone.parameters(), "name": "backbone"},
             {"params": self.classifier.parameters(), "name": "classifier"},
         ]
-        
+
         if self.optimizer_name == "sgd":
             optimizer = torch.optim.SGD(
                 params,
@@ -233,19 +267,20 @@ class GhostFaceModule(L.LightningModule):
             )
         else:
             raise ValueError(f"Unknown optimizer: {self.optimizer_name}")
-        
+
         # Learning rate scheduler 설정
         world_size = self.trainer.world_size if self.trainer else 1
         gradient_accumulation_steps = (
             getattr(self.trainer, "accumulate_grad_batches", 1) if self.trainer else 1
         )
         total_batch_size = self.batch_size * world_size * gradient_accumulation_steps
-        
+
         warmup_step = self.num_image // total_batch_size * self.warmup_epoch
         total_step = self.num_image // total_batch_size * self.num_epoch
-        
+
         if self.lr_decay_type == "polynomial":
             from .lr_scheduler import PolynomialLRWarmup
+
             scheduler = PolynomialLRWarmup(
                 optimizer=optimizer,
                 warmup_iters=warmup_step,
@@ -265,6 +300,7 @@ class GhostFaceModule(L.LightningModule):
             )
             # Warmup을 위한 wrapper
             from .lr_scheduler import WarmupLR
+
             scheduler = WarmupLR(scheduler, warmup_step)
             scheduler_config = {
                 "scheduler": scheduler,
@@ -282,31 +318,32 @@ class GhostFaceModule(L.LightningModule):
                 "interval": "epoch",
                 "frequency": 1,
             }
-        
+
         return {
             "optimizer": optimizer,
             "lr_scheduler": scheduler_config,
         }
-    
+
     def on_train_start(self) -> None:
         """Training 시작 시 호출"""
         # Resume 체크포인트 로드
         if self.resume_path and os.path.exists(self.resume_path):
             checkpoint = torch.load(self.resume_path, map_location=self.device)
-            
+
             if "state_dict" in checkpoint:
                 self.load_state_dict(checkpoint["state_dict"], strict=False)
             elif "model_state_dict" in checkpoint:
                 self.load_state_dict(checkpoint["model_state_dict"], strict=False)
-    
+
     def on_before_optimizer_step(self, optimizer):
         """Optimizer step 전에 gradient clipping"""
         # Gradient clipping
         backbone_norm = torch.nn.utils.clip_grad_norm_(self.backbone.parameters(), 5.0)
-        classifier_norm = torch.nn.utils.clip_grad_norm_(self.classifier.parameters(), 5.0)
-        
+        classifier_norm = torch.nn.utils.clip_grad_norm_(
+            self.classifier.parameters(), 5.0
+        )
+
         # 주기적으로 로깅
         if self.global_step % 100 == 0:
             self.log("grad_norm/backbone", backbone_norm, on_step=True)
             self.log("grad_norm/classifier", classifier_norm, on_step=True)
-

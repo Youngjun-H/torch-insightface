@@ -38,13 +38,13 @@ def main():
         "--epoch", type=int, default=None, help="Number of training epochs"
     )
     args = parser.parse_args()
-    
+
     # Config 로드
     cfg = get_config(args.config)
-    
+
     # Output 디렉토리 생성
     os.makedirs(cfg.output, exist_ok=True)
-    
+
     # DataModule 생성
     datamodule = GhostFaceDataModule(
         root_dir=cfg.rec,
@@ -53,7 +53,7 @@ def main():
         seed=cfg.seed,
         random_status=cfg.random_status,
     )
-    
+
     # Resume 체크포인트 경로 설정
     resume_ckpt_path = None
     if cfg.resume:
@@ -65,7 +65,7 @@ def main():
                 ckpt_files = [f for f in os.listdir(ckpt_dir) if f.endswith(".ckpt")]
                 if ckpt_files:
                     resume_ckpt_path = os.path.join(ckpt_dir, sorted(ckpt_files)[-1])
-    
+
     # Model 생성
     model = GhostFaceModule(
         network=cfg.network,
@@ -95,10 +95,10 @@ def main():
         gradient_acc=cfg.gradient_acc,
         resume=resume_ckpt_path,
     )
-    
+
     # Callbacks
     callbacks = []
-    
+
     # Verification Callbacks
     if cfg.verification_val_dir and cfg.verification_datasets:
         for filename, dataset_name in cfg.verification_datasets:
@@ -117,9 +117,9 @@ def main():
                         dataset_name=dataset_name,
                     )
                 )
-    
+
     callbacks.append(LearningRateMonitor(logging_interval="epoch"))
-    
+
     # Checkpoint Callback
     checkpoint_dir = os.path.join(cfg.output, "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
@@ -134,7 +134,7 @@ def main():
             save_on_train_epoch_end=True,
         )
     )
-    
+
     # Logger
     loggers = [
         WandbLogger(
@@ -142,7 +142,7 @@ def main():
             name=f"{datetime.now().strftime('%y%m%d_%H%M')}",
         )
     ]
-    
+
     # Trainer
     trainer = L.Trainer(
         max_epochs=args.epoch or cfg.num_epoch,
@@ -160,7 +160,7 @@ def main():
         enable_model_summary=True,
         log_every_n_steps=cfg.frequent,
     )
-    
+
     # Training 시작
     trainer.fit(
         model,
@@ -177,4 +177,3 @@ if __name__ == "__main__":
     torch.set_float32_matmul_precision("medium")
     wandb.login(key="53f960c86b81377b89feb5d30c90ddc6c3810d3a")
     main()
-
