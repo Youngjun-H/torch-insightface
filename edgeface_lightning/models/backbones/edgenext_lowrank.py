@@ -352,19 +352,33 @@ class SplitTransposeBlock(nn.Module):
         x_splits = [conv(x_split) for conv, x_split in zip(self.convs, x_splits)]
         x = torch.cat(x_splits, dim=1)
 
-        # Add positional encoding
-        pos = self.pos_embd(B, H, W)
+        # Get actual feature map size after conv operations
+        B_actual, C_actual, H_actual, W_actual = x.shape
+
+        # Add positional encoding with actual feature map size
+        pos = self.pos_embd(B_actual, H_actual, W_actual)
+
+        # Ensure pos has the same shape as x (handle potential size mismatches)
+        if pos.shape != x.shape:
+            # If spatial dimensions don't match, interpolate pos to match x
+            pos = torch.nn.functional.interpolate(
+                pos, size=(H_actual, W_actual), mode="bilinear", align_corners=False
+            )
         x = x + pos
 
         # XCA
         x = x.flatten(2).transpose(1, 2)  # B, C, H, W -> B, H*W, C
         x = x + self.drop_path(self.xca(self.norm_xca(x)))
-        x = x.transpose(1, 2).reshape(B, C, H, W)  # B, H*W, C -> B, C, H, W
+        x = x.transpose(1, 2).reshape(
+            B, C, H_actual, W_actual
+        )  # B, H*W, C -> B, C, H, W
 
         # MLP
         x = x.flatten(2).transpose(1, 2)  # B, C, H, W -> B, H*W, C
         x = x + self.drop_path(self.mlp(self.norm(x)))
-        x = x.transpose(1, 2).reshape(B, C, H, W)  # B, H*W, C -> B, C, H, W
+        x = x.transpose(1, 2).reshape(
+            B, C, H_actual, W_actual
+        )  # B, H*W, C -> B, C, H, W
 
         return x
 
@@ -699,4 +713,3 @@ def edgenext_base(featdim=512, rank_ratio=1.0):
     return TimmFRWrapperV2(
         model_name="edgenext_base", featdim=featdim, rank_ratio=rank_ratio
     )
-

@@ -9,14 +9,14 @@ from datetime import datetime
 
 import lightning as L
 import torch
-from data.datamodule import EdgeFaceDataModule
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger
-from lightning_utils.callbacks import FaceVerificationCallback
-from lightning_utils.config import get_config
-from models.module import EdgeFaceModule
 
 import wandb
+from edgeface_lightning.data.datamodule import EdgeFaceDataModule
+from edgeface_lightning.lightning_utils.callbacks import FaceVerificationCallback
+from edgeface_lightning.lightning_utils.config import get_config
+from edgeface_lightning.models.module import EdgeFaceModule
 
 
 def main():
