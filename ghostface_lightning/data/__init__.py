@@ -1,4 +1,0 @@
-"""
-Data package for GhostFaceNets
-"""
-

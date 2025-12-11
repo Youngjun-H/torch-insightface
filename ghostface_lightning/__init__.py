@@ -1,3 +1,0 @@
-"""
-GhostFaceNets Lightning Package
-"""

@@ -1,3 +1,0 @@
-"""
-GhostFaceNets Models Package
-"""

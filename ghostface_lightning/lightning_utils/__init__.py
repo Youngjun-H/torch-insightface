@@ -1,4 +1,0 @@
-"""
-Lightning utilities for GhostFaceNets
-"""
-

@@ -5,6 +5,7 @@ pairs.txt 파일을 읽어서 이미지 쌍과 레이블을 제공
 """
 
 import os
+import warnings
 from typing import List, Tuple
 
 import torch
@@ -32,10 +33,12 @@ class VerificationPairsDataset(Dataset):
         self.root_dir = root_dir
         self.image_size = image_size
 
-        # Transform: ArcFace 표준 전처리
+        # Transform: ArcFace 표준 전처리 (Center Crop 추가)
+        # 먼저 크게 리사이즈한 후 Center Crop을 사용하여 얼굴 비율 유지
         self.transform = transforms.Compose(
             [
-                transforms.Resize(image_size),
+                transforms.Resize((int(image_size[0] * 1.1), int(image_size[1] * 1.1))),
+                transforms.CenterCrop(image_size),
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
             ]
@@ -43,6 +46,8 @@ class VerificationPairsDataset(Dataset):
 
         # pairs.txt 파일 읽기
         self.pairs = self._load_pairs()
+        if len(self.pairs) == 0:
+            warnings.warn(f"No pairs loaded from {pairs_file}")
 
     def _load_pairs(self) -> List[Tuple[str, str, int]]:
         """
@@ -53,14 +58,21 @@ class VerificationPairsDataset(Dataset):
         """
         pairs = []
 
+        if not os.path.exists(self.pairs_file):
+            warnings.warn(f"Pairs file not found: {self.pairs_file}")
+            return pairs
+
         with open(self.pairs_file, "r") as f:
-            for line in f:
+            for line_num, line in enumerate(f, 1):
                 line = line.strip()
                 if not line:
                     continue
 
                 parts = line.split()
                 if len(parts) < 3:
+                    warnings.warn(
+                        f"Invalid line {line_num} in {self.pairs_file}: {line}"
+                    )
                     continue
 
                 # 형식 자동 감지: 첫 번째 필드가 숫자(0 또는 1)이고 경로가 아니면 label로 간주
@@ -95,11 +107,15 @@ class VerificationPairsDataset(Dataset):
     def _load_image(self, path: str) -> torch.Tensor:
         """이미지 로드 및 전처리"""
         try:
+            if not os.path.exists(path):
+                warnings.warn(f"Image not found: {path}")
+                return torch.zeros(3, *self.image_size)
+
             img = Image.open(path).convert("RGB")
             img = self.transform(img)
             return img
-        except Exception:
-            # 이미지 로드 실패 시 검은 이미지 반환
+        except Exception as e:
+            warnings.warn(f"Failed to load image {path}: {e}")
             return torch.zeros(3, *self.image_size)
 
     def __len__(self):
