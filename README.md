@@ -1,70 +1,75 @@
 # Face Recognition Training
 
-PyTorch Lightning 기반 얼굴 인식 모델 학습 (ArcFace, EdgeFace, GhostFaceNets)
+PyTorch Lightning 기반 얼굴 인식 모델 학습 프레임워크 (ArcFace, EdgeFace, GhostFaceNet)
 
-## 빠른 시작
+## 목적
 
-### ArcFace 학습
+대규모 얼굴 인식 모델을 분산 학습하기 위한 통합 프레임워크입니다. ArcFace, EdgeFace, GhostFaceNet 세 가지 모델을 지원하며, SLURM 환경에서 멀티 노드/멀티 GPU 학습을 지원합니다.
+
+## 모델 학습
+
+### ArcFace
+
+Config 파일 기반 학습:
 
 ```bash
 python -m arcface_lightning.train configs/ms1mv3_r50.py --epoch 20
 ```
 
-### EdgeFace 학습
+### EdgeFace
+
+Config 파일 기반 학습:
 
 ```bash
-python -m edgeface_lightning.train configs/edgeface_xs.py --epoch 20
+python -m edgeface_lightning.train edgeface_lightning/configs/edgeface_xs_gamma_06.py --epoch 50
 ```
 
-### GhostFaceNets 학습
+### GhostFaceNet
+
+Command-line arguments 기반 학습:
 
 ```bash
-python -m ghostfacenets_lightning.train \
+python -m ghostfacenet_lightning.train \
     --data_dir /path/to/dataset \
     --backbone ghostnetv1 \
     --width_mult 1.3 \
     --batch_size 256 \
-    --max_epochs 30
+    --max_epochs 100
 ```
 
-### SLURM 환경에서 학습
+## SLURM 환경에서 학습
+
+### ArcFace 학습
 
 ```bash
-sbatch train.sh
+sbatch train_arc.sh
 ```
 
-`train.sh`에서 노드 수와 GPU 수를 수정:
+`train_arc.sh`에서 노드 수와 GPU 수 수정:
 ```bash
 #SBATCH --nodes=4                    # 노드 수
 #SBATCH --gres=gpu:8                 # 노드당 GPU 수
 #SBATCH --ntasks-per-node=8          # 노드당 태스크 수
 ```
 
-## 주요 옵션
+### EdgeFace 학습
 
-- `config`: Config 파일 경로 (필수)
-- `--num_nodes`: 노드 수
-- `--devices`: 노드당 GPU 수
-- `--epoch`: 학습 epoch 수
-- `--saveckp_freq`: 체크포인트 저장 주기 (기본: 1 epoch)
+```bash
+sbatch train_edge.sh
+```
 
-## EdgeFace 모델 변형
+`train_edge.sh`에서 노드 수와 GPU 수 수정 (위와 동일)
 
-- `edgeface_xs_gamma_06`: X-Small with low-rank (rank_ratio=0.6)
-- `edgeface_s_gamma_05`: Small with low-rank (rank_ratio=0.5)
-- `edgeface_xxs`: XX-Small
-- `edgeface_base`: Base
+### GhostFaceNet 학습
 
-## GhostFaceNets 주요 옵션
+```bash
+sbatch train_ghost.sh
+```
 
-- `--backbone`: 백본 타입 (`ghostnetv1`, `ghostnetv2`)
-- `--width_mult`: 채널 수 조정 (기본: 1.0)
-- `--strides`: 첫 번째 stem 레이어 stride (1 또는 2)
-- `--max_epochs`: 학습 epoch 수
+`train_ghost.sh`에서 노드 수와 GPU 수 수정 (위와 동일)
 
 ## 출력
 
 - 체크포인트: `outputs/{config_name}/checkpoints/`
 - 로그: WandB에 자동 업로드
 - Verification: 매 epoch 종료 시 자동 평가 (LFW, AgeDB-30, CALFW, CPLFW)
-
