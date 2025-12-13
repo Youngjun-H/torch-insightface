@@ -87,6 +87,6 @@ echo "  - GPUs per node: $ACTUAL_GPUS_PER_NODE"
 echo "  - Total GPUs: $((ACTUAL_NODES * ACTUAL_GPUS_PER_NODE))"
 echo ""
 
-srun python lightning_ghostfacenets/onnx/convert_to_onnx.py \
-    --checkpoint_path checkpoints/important/ghostfacenet-epoch=99-train_loss=5.26.ckpt \
+srun python ghostfacenet_lightning/onnx/convert_to_onnx.py \
+    --checkpoint_path ghostfacenet-epoch=03-train_loss=16.20.ckpt \
     --output_path models/ghostfacenet.onnx

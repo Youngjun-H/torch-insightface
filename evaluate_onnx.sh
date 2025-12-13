@@ -91,8 +91,8 @@ echo ""
 PAIRS_DIR="/purestorage/AILAB/AI_2/yjhwang/work/face/datasets/FACE_VAL/val"
 ROOT_DIR="/purestorage/AILAB/AI_2/yjhwang/work/face/datasets/FACE_VAL/val"
 
-srun python lightning_ghostfacenets/onnx/evaluate_onnx.py \
-    --onnx_path /purestorage/AILAB/AI_2/yjhwang/work/face/test/lightning_ghostfacenets/ghostfacenet.onnx \
+srun python ghostfacenet_lightning/onnx/evaluate_onnx.py \
+    --onnx_path models/ghostfacenet.onnx \
     --pairs_dir ${PAIRS_DIR} \
     --pairs_file lfw_ann.txt agedb_30_ann.txt cfp_fp_ann.txt \
     --root_dir ${ROOT_DIR} \
