@@ -24,7 +24,7 @@ def main():
 
     # Data arguments
     parser.add_argument(
-        "--data_dir", type=str, required=True, help="Path to dataset directory"
+        "--data_dir", type=str, nargs="+", required=True, help="Path(s) to dataset directory(ies). Multiple directories can be specified."
     )
     parser.add_argument("--batch_size", type=int, default=128, help="Batch size")
     parser.add_argument(

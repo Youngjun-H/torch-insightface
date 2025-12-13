@@ -23,10 +23,11 @@ class FaceDataset(Dataset):
         ...
     """
 
-    def __init__(self, root_dir, transform=None, is_train=True):
+    def __init__(self, root_dir, transform=None, is_train=True, class_offset=0):
         self.root_dir = root_dir
         self.transform = transform
         self.is_train = is_train
+        self.class_offset = class_offset
 
         # Load image paths and labels
         self.samples = []
@@ -43,18 +44,19 @@ class FaceDataset(Dataset):
         )
 
         for idx, class_name in enumerate(classes):
-            self.class_to_idx[class_name] = idx
-            self.idx_to_class[idx] = class_name
+            adjusted_idx = idx + class_offset
+            self.class_to_idx[class_name] = adjusted_idx
+            self.idx_to_class[adjusted_idx] = class_name
 
             class_dir = os.path.join(root_dir, class_name)
             image_files = glob.glob(os.path.join(class_dir, "*.jpg"))
             image_files.extend(glob.glob(os.path.join(class_dir, "*.png")))
 
             for img_path in image_files:
-                self.samples.append((img_path, idx))
+                self.samples.append((img_path, adjusted_idx))
 
         self.num_classes = len(classes)
-        print(f"Found {len(self.samples)} images in {self.num_classes} classes")
+        print(f"Found {len(self.samples)} images in {self.num_classes} classes (offset: {class_offset})")
 
     def __len__(self):
         return len(self.samples)
