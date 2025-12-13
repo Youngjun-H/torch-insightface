@@ -10,25 +10,19 @@ from models.backbone import GhostNetV1, GhostNetV2
 
 
 class GDC(nn.Module):
-    """Global Depthwise Convolution for feature extraction
-
-    The kernel size is dynamically set to match the input spatial size,
-    following the original TensorFlow implementation where DepthwiseConv2D
-    uses nn.shape[1] (spatial dimension) as kernel_size.
-
-    This implementation uses a dictionary to cache Conv2d layers for different
-    input sizes, creating them on-demand during forward pass.
-    """
+    """Global Depthwise Convolution for feature extraction"""
 
     def __init__(self, in_channels, embedding_size=512, dropout=0.0):
         super().__init__()
         self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
-        self.in_channels = in_channels
-        self.embedding_size = embedding_size
 
-        # Dictionary to cache Conv2d layers for different kernel sizes
-        self.dw_convs = nn.ModuleDict()
-        self.dw_bns = nn.ModuleDict()
+        # Depthwise convolution
+        self.dw_conv = nn.Sequential(
+            nn.Conv2d(
+                in_channels, in_channels, kernel_size=7, groups=in_channels, bias=False
+            ),
+            nn.BatchNorm2d(in_channels),
+        )
 
         # Pointwise convolution
         self.pw_conv = nn.Conv2d(in_channels, embedding_size, kernel_size=1, bias=False)
@@ -36,43 +30,8 @@ class GDC(nn.Module):
         # Final batch norm
         self.bn = nn.BatchNorm2d(embedding_size, affine=False)
 
-    def _get_dw_conv(self, kernel_size, device):
-        """Get or create depthwise convolution layer for given kernel size"""
-        key = str(kernel_size)
-        if key not in self.dw_convs:
-            # Create depthwise conv: groups=in_channels for depthwise
-            self.dw_convs[key] = nn.Conv2d(
-                self.in_channels,
-                self.in_channels,
-                kernel_size=kernel_size,
-                groups=self.in_channels,
-                bias=False,
-                padding=0,  # No padding for global convolution
-            )
-            self.dw_bns[key] = nn.BatchNorm2d(self.in_channels)
-            # Move to the correct device
-            self.dw_convs[key] = self.dw_convs[key].to(device)
-            self.dw_bns[key] = self.dw_bns[key].to(device)
-        else:
-            # Ensure existing layers are on the correct device
-            self.dw_convs[key] = self.dw_convs[key].to(device)
-            self.dw_bns[key] = self.dw_bns[key].to(device)
-        return self.dw_convs[key], self.dw_bns[key]
-
     def forward(self, x):
-        # Get spatial dimensions
-        _, _, h, w = x.shape
-        # Use the spatial dimension as kernel_size (matching TensorFlow: DepthwiseConv2D(nn.shape[1], ...))
-        # For square feature maps, use h or w. For non-square, use min to ensure it fits.
-        kernel_size = min(h, w)
-
-        # Get or create the appropriate depthwise convolution layer
-        # Pass device to ensure layers are on the correct device
-        dw_conv, dw_bn = self._get_dw_conv(kernel_size, x.device)
-
-        # Apply depthwise convolution
-        x = dw_conv(x)
-        x = dw_bn(x)
+        x = self.dw_conv(x)
         x = self.dropout(x)
         x = self.pw_conv(x)
         x = self.bn(x)
@@ -91,7 +50,6 @@ class GhostFaceNet(nn.Module):
         dropout=0.0,
         input_size=112,
         num_ghost_v1_stacks=2,
-        strides=2,
         stem_strides=1,
         use_prelu=False,
     ):
@@ -101,7 +59,7 @@ class GhostFaceNet(nn.Module):
         # Backbone
         if backbone_type.lower() == "ghostnetv1":
             self.backbone = GhostNetV1(
-                width_mult=width_mult, input_size=input_size, strides=strides
+                width_mult=width_mult, input_size=input_size, stem_strides=stem_strides
             )
             # Get output channels from backbone
             with torch.no_grad():

@@ -40,10 +40,10 @@ class ArcFaceLoss(nn.Module):
 
         # Cosine similarity
         cosine = F.linear(embeddings, weight)  # (batch_size, num_classes)
-        cosine = cosine.clamp(-1 + 1e-7, 1 - 1e-7)  # 수치적 안정성을 위해 epsilon 추가
+        cosine = cosine.clamp(-1, 1)
 
-        # Calculate theta (수치적 안정성 개선)
-        sine = torch.sqrt(torch.clamp(1.0 - torch.pow(cosine, 2), min=1e-7))
+        # Calculate theta
+        sine = torch.sqrt(1.0 - torch.pow(cosine, 2))
         phi = cosine * self.cos_m - sine * self.sin_m
 
         # Apply margin

@@ -10,7 +10,6 @@ from typing import Optional
 import lightning as L
 import numpy as np
 import torch
-import torch.nn.functional as F
 from data.verification_dataset import VerificationPairsDataset
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import KFold
@@ -88,89 +87,96 @@ class FaceVerificationCallback(L.Callback):
         self, trainer: L.Trainer, pl_module: L.LightningModule
     ) -> None:
         """Epoch 끝날 때 verification 수행"""
+        # on_train_epoch_end에서는 on_step=False, on_epoch=True만 허용됨
+        self._run_verification(
+            trainer, pl_module, trainer.global_step, on_step=False, on_epoch=True
+        )
+
+    def _run_verification(
+        self,
+        trainer: L.Trainer,
+        pl_module: L.LightningModule,
+        global_step: int,
+        on_step: bool = True,
+        on_epoch: bool = False,
+    ) -> None:
+        """Verification 수행"""
         # 분산 학습 환경에서 메인 프로세스만 실행
-        if trainer.global_rank == 0:
-            if self.dataset is None:
-                self.setup(trainer, pl_module, "fit")
+        if trainer.global_rank != 0:
+            return
 
-            # 데이터셋이 비어있으면 스킵
-            if len(self.dataset) == 0:
-                print(
-                    f"Warning: {self.dataset_name} dataset is empty, skipping evaluation"
-                )
-            else:
-                pl_module.eval()
+        if self.dataset is None:
+            self.setup(trainer, pl_module, "fit")
 
-                embeddings1_list = []
-                embeddings2_list = []
-                labels_list = []
+        # 데이터셋이 비어있으면 스킵
+        if len(self.dataset) == 0:
+            print(f"Warning: {self.dataset_name} dataset is empty, skipping evaluation")
+            return
 
-                with torch.no_grad():
-                    for img1, img2, label in self.dataloader:
-                        img1 = img1.to(pl_module.device)
-                        img2 = img2.to(pl_module.device)
+        pl_module.eval()
 
-                        # 모델 forward
-                        emb1 = pl_module(img1)
-                        emb2 = pl_module(img2)
+        embeddings1_list = []
+        embeddings2_list = []
+        labels_list = []
 
-                        # L2 정규화 (arcface_lightning과 동일하게 callback에서 수행)
-                        emb1 = F.normalize(emb1, p=2, dim=1)
-                        emb2 = F.normalize(emb2, p=2, dim=1)
+        with torch.no_grad():
+            for img1, img2, label in self.dataloader:
+                img1 = img1.to(pl_module.device)
+                img2 = img2.to(pl_module.device)
 
-                        embeddings1_list.append(emb1.cpu().numpy())
-                        embeddings2_list.append(emb2.cpu().numpy())
-                        labels_list.append(label.numpy())
+                # 모델 forward (이미 L2 정규화된 embedding 반환)
+                emb1 = pl_module(img1)
+                emb2 = pl_module(img2)
 
-                embeddings1 = np.concatenate(embeddings1_list, axis=0)
-                embeddings2 = np.concatenate(embeddings2_list, axis=0)
-                labels = np.concatenate(labels_list, axis=0)
+                # 모델이 이미 정규화하므로 중복 정규화 제거
+                # GhostFaceNet.forward()에서 이미 F.normalize() 수행
 
-                # 코사인 유사도 계산 (정규화된 벡터의 내적)
-                similarities = np.sum(embeddings1 * embeddings2, axis=1)
+                embeddings1_list.append(emb1.cpu().numpy())
+                embeddings2_list.append(emb2.cpu().numpy())
+                labels_list.append(label.numpy())
 
-                # K-fold cross validation으로 정확도 계산
-                accuracy, threshold = self._k_fold_accuracy(
-                    similarities, labels, self.n_folds
-                )
+        embeddings1 = np.concatenate(embeddings1_list, axis=0)
+        embeddings2 = np.concatenate(embeddings2_list, axis=0)
+        labels = np.concatenate(labels_list, axis=0)
 
-                pl_module.train()
+        # 코사인 유사도 계산 (정규화된 벡터의 내적)
+        similarities = np.sum(embeddings1 * embeddings2, axis=1)
 
-                # 최고 정확도 업데이트
-                if accuracy > self.highest_acc:
-                    self.highest_acc = accuracy
+        # K-fold cross validation으로 정확도 계산
+        accuracy, threshold = self._k_fold_accuracy(similarities, labels, self.n_folds)
 
-                # 로깅 (rank 0에서만 실행되므로 sync_dist=False)
-                log_prefix = f"val/{self.dataset_name}"
-                pl_module.log(
-                    f"{log_prefix}_accuracy",
-                    accuracy,
-                    on_step=False,
-                    on_epoch=True,
-                    prog_bar=True,
-                    sync_dist=False,
-                )
-                pl_module.log(
-                    f"{log_prefix}_threshold",
-                    threshold,
-                    on_step=False,
-                    on_epoch=True,
-                    sync_dist=False,
-                )
-                pl_module.log(
-                    f"{log_prefix}_highest_accuracy",
-                    self.highest_acc,
-                    on_step=False,
-                    on_epoch=True,
-                    sync_dist=False,
-                )
+        pl_module.train()
 
-                # 콘솔 출력
-                print(
-                    f"[{self.dataset_name.upper()}] Accuracy: {accuracy:.4f}, "
-                    f"Threshold: {threshold:.4f}, "
-                    f"Highest: {self.highest_acc:.4f}"
-                )
+        # 최고 정확도 업데이트
+        if accuracy > self.highest_acc:
+            self.highest_acc = accuracy
+
+        # 로깅 (Wandb에 자동으로 기록됨)
+        # sync_dist=False: rank 0에서만 실행되므로 다른 프로세스와 동기화 불필요
+        # sync_dist=True를 사용하면 다른 rank들이 이 로그를 기다리면서 NCCL timeout 발생
+        log_prefix = f"val/{self.dataset_name}"
+        pl_module.log(
+            f"{log_prefix}_accuracy",
+            accuracy,
+            on_step=on_step,
+            on_epoch=on_epoch,
+            prog_bar=True,
+            sync_dist=False,  # rank 0에서만 실행되므로 동기화 불필요
+        )
+        pl_module.log(
+            f"{log_prefix}_threshold",
+            threshold,
+            on_step=on_step,
+            on_epoch=on_epoch,
+            sync_dist=False,  # rank 0에서만 실행되므로 동기화 불필요
+        )
+        pl_module.log(
+            f"{log_prefix}_highest_accuracy",
+            self.highest_acc,
+            on_step=on_step,
+            on_epoch=on_epoch,
+            sync_dist=False,  # rank 0에서만 실행되므로 동기화 불필요
+        )
 
     def _k_fold_accuracy(
         self,

@@ -20,8 +20,6 @@ class ModelConfig:
     """Model configuration"""
     backbone: str = "ghostnetv1"  # ghostnetv1 or ghostnetv2
     width_mult: float = 1.0
-    strides: int = 2  # Stem layer strides for GhostNetV1 (1 or 2)
-    stem_strides: int = 1  # Stem layer strides for GhostNetV2 (1 or 2)
     embedding_size: int = 512
     dropout: float = 0.0
     input_size: int = 112

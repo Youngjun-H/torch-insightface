@@ -47,13 +47,6 @@ def main():
         "--width_mult", type=float, default=1.0, help="Width multiplier"
     )
     parser.add_argument(
-        "--strides",
-        type=int,
-        default=2,
-        choices=[1, 2],
-        help="Stem layer strides for GhostNetV1 (1 or 2)",
-    )
-    parser.add_argument(
         "--embedding_size", type=int, default=512, help="Embedding size"
     )
     parser.add_argument("--dropout", type=float, default=0.0, help="Dropout rate")
@@ -68,7 +61,7 @@ def main():
         type=int,
         default=1,
         choices=[1, 2],
-        help="Stem layer strides for GhostNetV2 (1 or 2)",
+        help="Stem layer strides (1 or 2)",
     )
 
     # Loss arguments
@@ -90,10 +83,10 @@ def main():
     parser.add_argument(
         "--lr_min", type=float, default=1e-5, help="Minimum learning rate"
     )
-    parser.add_argument("--max_epochs", type=int, default=100, help="Maximum epochs")
     parser.add_argument(
         "--warmup_epochs", type=int, default=5, help="Number of warmup epochs"
     )
+    parser.add_argument("--max_epochs", type=int, default=100, help="Maximum epochs")
 
     # Lightning arguments
     parser.add_argument(
@@ -155,6 +148,12 @@ def main():
         default=4,
         help="Number of workers for verification dataloader",
     )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="./checkpoints",
+        help="Output directory for checkpoints",
+    )
 
     args = parser.parse_args()
 
@@ -181,7 +180,6 @@ def main():
         dropout=args.dropout,
         input_size=args.input_size,
         num_ghost_v1_stacks=args.num_ghost_v1_stacks,
-        strides=args.strides,
         stem_strides=args.stem_strides,
         margin=args.margin,
         scale=args.scale,
@@ -191,8 +189,8 @@ def main():
         lr_scheduler=args.lr_scheduler,
         lr_decay_steps=args.lr_decay_steps,
         lr_min=args.lr_min,
-        max_epochs=args.max_epochs,
         warmup_epochs=args.warmup_epochs,
+        max_epochs=args.max_epochs,
     )
 
     callbacks = []
@@ -225,22 +223,11 @@ def main():
             else:
                 print(f"Warning: Verification pairs file not found: {pairs_file}")
 
-    # # ModelCheckpoint: verification accuracy 또는 train_loss 모니터링
-    # if first_verification_dataset:
-    #     # Verification callback이 있으면 첫 번째 벤치마크의 accuracy 모니터링
-    #     monitor_metric = f"val/{first_verification_dataset}_accuracy"
-    #     filename_pattern = (
-    #         f"{{epoch}}-{{val_{first_verification_dataset}_accuracy:.4f}}"
-    #     )
-    #     print(f"ModelCheckpoint will monitor: {monitor_metric}")
-    # else:
-    #     # Verification callback이 없으면 train_loss 모니터링
-    #     monitor_metric = "train_loss"
-    #     filename_pattern = "{epoch}-{train_loss:.4f}"
-    #     print("ModelCheckpoint will monitor: train_loss (no verification callbacks)")
+    # 체크포인트 저장 디렉토리 설정
+    os.makedirs(args.output_dir, exist_ok=True)
 
     checkpoint_callback = ModelCheckpoint(
-        dirpath="./checkpoints",
+        dirpath=args.output_dir,
         filename="ghostfacenet-{epoch:02d}-{train_loss:.2f}",
         save_top_k=3,
         monitor="train_loss",  # module.py에서 로깅하는 키와 일치
@@ -253,24 +240,17 @@ def main():
     callbacks.append(lr_monitor)
 
     # Logger
-    # wandb 설정: 업로드 실패 시에도 학습이 계속되도록 설정
-    # wandb_settings = wandb.Settings(
-    #     _disable_meta=True,  # 메타데이터 업로드 비활성화 (업로드 실패 방지)
-    #     _disable_stats=True,  # 통계 정보 업로드 비활성화
-    #     start_method="fork",  # 분산 학습 환경에서 안정적인 시작 방법
-    # )
-
     loggers = [
         WandbLogger(
             project="GhostFaceNets-Lightning",
             name=f"{datetime.now().strftime('%y%m%d_%H%M')}",
             save_dir="./logs",
-            # settings=wandb_settings,
         )
     ]
 
     # Trainer
-    # arcface_lightning과 동일하게 DDP strategy 명시적 설정
+    # SLURM 환경에서는 Lightning이 자동으로 분산 학습을 감지하지만,
+    # 명시적으로 설정하는 것이 더 안정적입니다.
     trainer = L.Trainer(
         max_epochs=args.max_epochs,
         accelerator=args.accelerator,
@@ -282,7 +262,7 @@ def main():
         log_every_n_steps=50,
         enable_progress_bar=True,
         enable_model_summary=True,
-        strategy="ddp",  # arcface_lightning과 동일하게 DDP 명시
+        strategy="ddp",
     )
 
     # Train (ckpt_path는 fit() 메서드에 전달)
@@ -291,12 +271,5 @@ def main():
 
 if __name__ == "__main__":
     torch.set_float32_matmul_precision("medium")
-
-    # wandb 로그인: 실패해도 학습은 계속 진행
-    try:
-        wandb.login(key="53f960c86b81377b89feb5d30c90ddc6c3810d3a")
-    except Exception as e:
-        print(f"Warning: wandb login failed: {e}")
-        print("Continuing training without wandb login...")
-
+    wandb.login(key="53f960c86b81377b89feb5d30c90ddc6c3810d3a")
     main()

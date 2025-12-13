@@ -87,17 +87,16 @@ echo "  - GPUs per node: $ACTUAL_GPUS_PER_NODE"
 echo "  - Total GPUs: $((ACTUAL_NODES * ACTUAL_GPUS_PER_NODE))"
 echo ""
 
-srun python -m lightning_ghostfacenets.train \
-        --data_dir /purestorage/AILAB/AI_2/yjhwang/work/face/datasets/ms1m-arcface \
-        --backbone ghostnetv1 \
-        --width_mult 1.3 \
-        --strides 1 \
-        --batch_size 256 \
-        --lr 0.1 \
-        --max_epochs 30 \
-        --num_nodes ${ACTUAL_NODES} \
-        --devices ${ACTUAL_GPUS_PER_NODE} \
-        --precision bf16-mixed \
-        --verification_pairs_dir /purestorage/AILAB/AI_2/yjhwang/work/face/datasets/FACE_VAL/val \
-        --verification_datasets lfw_ann.txt agedb_30_ann.txt calfw_ann.txt cplfw_ann.txt \
-        --verification_batch_size 32
+srun python -m ghostfacenet_lightning.train \
+    --data_dir /purestorage/AILAB/AI_2/yjhwang/work/face/datasets/ms1m-arcface \
+    --backbone ghostnetv1 \
+    --width_mult 1.3 \
+    --batch_size 256 \
+    --lr 0.1 \
+    --max_epochs 100 \
+    --num_nodes ${ACTUAL_NODES} \
+    --devices ${ACTUAL_GPUS_PER_NODE} \
+    --precision bf16-mixed \
+    --verification_pairs_dir /purestorage/AILAB/AI_2/yjhwang/work/face/datasets/FACE_VAL/val \
+    --verification_datasets lfw_ann.txt agedb_30_ann.txt cfp_fp_ann.txt calfw_ann.txt cplfw_ann.txt \
+    --verification_batch_size 32

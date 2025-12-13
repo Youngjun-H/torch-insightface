@@ -153,14 +153,14 @@ class GhostBottleneck(nn.Module):
 class GhostNetV1(nn.Module):
     """GhostNet V1 Backbone"""
 
-    def __init__(self, width_mult=1.0, input_size=112, strides=2):
+    def __init__(self, width_mult=1.0, input_size=112, stem_strides=2):
         super().__init__()
         self.input_size = input_size
 
         # First layer (stem)
         stem_channels = make_divisible(16 * width_mult, 4)
         self.stem = nn.Sequential(
-            nn.Conv2d(3, stem_channels, 3, strides, 1, bias=False),
+            nn.Conv2d(3, stem_channels, 3, stem_strides, 1, bias=False),
             nn.BatchNorm2d(stem_channels),
             nn.ReLU(inplace=True),
         )
