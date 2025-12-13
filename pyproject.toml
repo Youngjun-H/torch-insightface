@@ -1,5 +1,5 @@
 [project]
-name = "torch-insightface"
+name = "face-recognition"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
