@@ -68,6 +68,39 @@ sbatch train_ghost.sh
 
 `train_ghost.sh`에서 노드 수와 GPU 수 수정 (위와 동일)
 
+## ONNX 변환 및 평가
+
+### 체크포인트를 ONNX로 변환
+
+GhostFaceNet 체크포인트를 ONNX 형식으로 변환:
+
+```bash
+sbatch convert_to_onnx.sh
+```
+
+`convert_to_onnx.sh`에서 체크포인트 경로와 출력 경로 수정:
+```bash
+srun python ghostfacenet_lightning/onnx/convert_to_onnx.py \
+    --checkpoint_path <체크포인트_경로> \
+    --output_path <출력_경로>
+```
+
+### ONNX 모델 평가
+
+변환된 ONNX 모델을 벤치마크 데이터셋으로 평가:
+
+```bash
+sbatch evaluate_onnx.sh
+```
+
+`evaluate_onnx.sh`에서 ONNX 모델 경로와 평가 데이터셋 경로 수정:
+```bash
+srun python ghostfacenet_lightning/onnx/evaluate_onnx.py \
+    --onnx_path <onnx_모델_경로> \
+    --pairs_dir <평가_데이터셋_경로> \
+    --pairs_file lfw_ann.txt agedb_30_ann.txt ...
+```
+
 ## 출력
 
 - 체크포인트: `outputs/{config_name}/checkpoints/`
